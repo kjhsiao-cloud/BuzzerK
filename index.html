@@ -652,6 +652,15 @@
                     <div style="font-family: 'Orbitron', sans-serif; font-size: 2rem; color: var(--gold);" id="playerGameCode">----</div>
                 </div>
 
+                <!-- Player Icon Display -->
+                <div style="display: flex; justify-content: center; margin-bottom: 2rem;">
+                    <div id="playerIcon" class="player-card" style="max-width: 250px;">
+                        <div class="player-avatar" id="playerAvatar">?</div>
+                        <div class="player-name" id="playerDisplayName">You</div>
+                        <div class="player-status" id="playerStatus">Waiting...</div>
+                    </div>
+                </div>
+
                 <div class="buzz-indicator" id="buzzIndicator">
                     Ready to buzz!
                 </div>
@@ -896,9 +905,21 @@
             const leaderboard = document.getElementById('leaderboard');
             const button = document.getElementById('buzzButton');
             const indicator = document.getElementById('buzzIndicator');
+            const playerIcon = document.getElementById('playerIcon');
+            const playerAvatar = document.getElementById('playerAvatar');
+            const playerDisplayName = document.getElementById('playerDisplayName');
+            const playerStatus = document.getElementById('playerStatus');
+
+            // Set player name and initials
+            const initials = window.currentPlayer.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+            playerAvatar.textContent = initials;
+            playerDisplayName.textContent = window.currentPlayer.name;
 
             // Check if current player has buzzed
             const myBuzz = buzzes[window.currentPlayer.id];
+            
+            // Reset icon classes
+            playerIcon.className = 'player-card';
             
             if (myBuzz) {
                 button.disabled = true;
@@ -911,17 +932,24 @@
                 const myIndex = buzzesArray.findIndex(b => b.id === window.currentPlayer.id);
 
                 if (myIndex === 0) {
+                    // First buzzer - RED
+                    playerIcon.classList.add('buzzed-first');
+                    playerStatus.textContent = '🔴 FIRST!';
                     indicator.textContent = '🔴 YOU BUZZED FIRST!';
                     indicator.className = 'buzz-indicator first-buzz';
                 } else {
+                    // Other buzzers - BLUE with time difference
+                    playerIcon.classList.add('buzzed');
                     const diffMs = myBuzz.time - gameData.firstBuzzTime;
                     const diffSeconds = (diffMs / 1000).toFixed(3);
+                    playerStatus.innerHTML = `⚡ Buzzed<br><span style="font-size: 0.8rem;">+${diffSeconds}s</span>`;
                     indicator.textContent = `⚡ Buzzed! +${diffSeconds}s after first`;
                     indicator.className = 'buzz-indicator';
                 }
             } else {
                 button.disabled = false;
                 button.textContent = 'BUZZ!';
+                playerStatus.textContent = 'Waiting...';
                 indicator.textContent = 'Ready to buzz!';
                 indicator.className = 'buzz-indicator';
             }
