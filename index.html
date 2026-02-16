@@ -422,6 +422,7 @@
             gap: 1rem;
             justify-content: center;
             margin-top: 2rem;
+            flex-wrap: wrap;
         }
 
         .btn-secondary {
@@ -517,6 +518,23 @@
             font-size: 1rem;
         }
 
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            font-size: 1.2rem;
+            color: var(--electric-blue);
+        }
+
+        .error {
+            background: rgba(255, 0, 84, 0.2);
+            border: 2px solid var(--danger-red);
+            border-radius: 10px;
+            padding: 1rem;
+            margin: 1rem 0;
+            color: var(--danger-red);
+            text-align: center;
+        }
+
         @media (max-width: 768px) {
             h1 {
                 font-size: 3rem;
@@ -598,6 +616,7 @@
                 <div class="controls">
                     <button class="btn-secondary" onclick="showModeScreen()">Back</button>
                 </div>
+                <div id="joinError" class="error" style="display: none;"></div>
             </div>
         </div>
 
@@ -653,27 +672,57 @@
         </div>
     </div>
 
-    <script>
-        // Simulated backend storage (in real app, use WebSocket/Firebase/etc)
-        let games = {};
-        let currentGame = null;
-        let currentPlayer = null;
-        let isHost = false;
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getDatabase, ref, set, push, onValue, update, remove, get, onDisconnect } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
 
-        function showModeScreen() {
+    // Import the functions you need from the SDKs you need
+	import { initializeApp } from "firebase/app";
+	// TODO: Add SDKs for Firebase products that you want to use
+	// https://firebase.google.com/docs/web/setup#available-libraries
+
+	// Your web app's Firebase configuration
+		const firebaseConfig = {
+  			apiKey: "AIzaSyAT89gU_ue_mh5XFp0EERlUL--PUcICWv8",
+  			authDomain: "buzzerk-3bdd9.firebaseapp.com",
+  			databaseURL: "https://buzzerk-3bdd9-default-rtdb.firebaseio.com",
+  			projectId: "buzzerk-3bdd9",
+  			storageBucket: "buzzerk-3bdd9.firebasestorage.app",
+  			messagingSenderId: "677604722241",
+  			appId: "1:677604722241:web:8f694d4f6357bc0812e8c0"
+		};
+
+
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const database = getDatabase(app);
+
+        // Global state
+        window.db = database;
+        window.currentGame = null;
+        window.currentPlayer = null;
+        window.isHost = false;
+        window.gameListener = null;
+        window.playerRef = null;
+
+        // Screen management
+        window.showModeScreen = function() {
             hideAllScreens();
             document.getElementById('modeScreen').classList.add('active');
-        }
+            cleanupListeners();
+        };
 
-        function showHostScreen() {
+        window.showHostScreen = function() {
             hideAllScreens();
             document.getElementById('hostScreen').classList.add('active');
-        }
+        };
 
-        function showJoinScreen() {
+        window.showJoinScreen = function() {
             hideAllScreens();
             document.getElementById('joinScreen').classList.add('active');
-        }
+        };
 
         function hideAllScreens() {
             document.querySelectorAll('.screen').forEach(screen => {
@@ -681,11 +730,19 @@
             });
         }
 
+        function cleanupListeners() {
+            if (window.gameListener) {
+                window.gameListener();
+                window.gameListener = null;
+            }
+        }
+
         function generateGameCode() {
             return Math.floor(1000 + Math.random() * 9000).toString();
         }
 
-        function createGame() {
+        // Create game
+        window.createGame = async function() {
             const hostName = document.getElementById('hostName').value.trim();
             if (!hostName) {
                 alert('Please enter your name');
@@ -693,115 +750,115 @@
             }
 
             const code = generateGameCode();
-            currentGame = code;
-            isHost = true;
+            window.currentGame = code;
+            window.isHost = true;
 
-            games[code] = {
+            // Create game in Firebase
+            const gameRef = ref(database, `games/${code}`);
+            await set(gameRef, {
                 host: hostName,
-                players: [],
-                buzzes: [],
+                createdAt: Date.now(),
                 firstBuzzTime: null
-            };
+            });
 
             document.getElementById('displayGameCode').textContent = code;
             hideAllScreens();
             document.getElementById('hostGameScreen').classList.add('active');
-            updateHostView();
-        }
+            
+            // Listen to game updates
+            listenToGame(code);
+        };
 
-        function joinGame() {
+        // Join game
+        window.joinGame = async function() {
             const playerName = document.getElementById('playerName').value.trim();
             const gameCode = document.getElementById('gameCode').value.trim();
+            const errorDiv = document.getElementById('joinError');
 
             if (!playerName) {
-                alert('Please enter your name');
+                errorDiv.textContent = 'Please enter your name';
+                errorDiv.style.display = 'block';
                 return;
             }
 
             if (!gameCode || gameCode.length !== 4) {
-                alert('Please enter a valid 4-digit game code');
+                errorDiv.textContent = 'Please enter a valid 4-digit game code';
+                errorDiv.style.display = 'block';
                 return;
             }
 
-            if (!games[gameCode]) {
-                alert('Game not found. Please check the code.');
+            // Check if game exists
+            const gameRef = ref(database, `games/${gameCode}`);
+            const snapshot = await get(gameRef);
+
+            if (!snapshot.exists()) {
+                errorDiv.textContent = 'Game not found. Please check the code.';
+                errorDiv.style.display = 'block';
                 return;
             }
 
-            currentGame = gameCode;
-            currentPlayer = {
-                name: playerName,
-                id: Date.now().toString()
-            };
-            isHost = false;
+            errorDiv.style.display = 'none';
+            window.currentGame = gameCode;
+            window.isHost = false;
 
             // Add player to game
-            games[gameCode].players.push(currentPlayer);
+            const playersRef = ref(database, `games/${gameCode}/players`);
+            const newPlayerRef = push(playersRef);
+            window.currentPlayer = {
+                id: newPlayerRef.key,
+                name: playerName
+            };
+
+            await set(newPlayerRef, {
+                name: playerName,
+                joinedAt: Date.now()
+            });
+
+            // Setup disconnect handler
+            window.playerRef = newPlayerRef;
+            onDisconnect(newPlayerRef).remove();
 
             document.getElementById('playerGameCode').textContent = gameCode;
             hideAllScreens();
             document.getElementById('playerGameScreen').classList.add('active');
-            updatePlayerView();
-        }
 
-        function buzz() {
-            if (!currentGame || !currentPlayer) return;
+            // Listen to game updates
+            listenToGame(gameCode);
+        };
 
-            const game = games[currentGame];
-            const button = document.getElementById('buzzButton');
-            const indicator = document.getElementById('buzzIndicator');
+        // Listen to game updates
+        function listenToGame(gameCode) {
+            const gameRef = ref(database, `games/${gameCode}`);
+            
+            window.gameListener = onValue(gameRef, (snapshot) => {
+                if (!snapshot.exists()) {
+                    alert('Game has ended');
+                    showModeScreen();
+                    return;
+                }
 
-            // Check if already buzzed
-            if (game.buzzes.some(b => b.playerId === currentPlayer.id)) {
-                return;
-            }
-
-            const buzzTime = Date.now();
-
-            // Record first buzz time if this is the first
-            if (game.buzzes.length === 0) {
-                game.firstBuzzTime = buzzTime;
-            }
-
-            // Calculate time difference from first buzz
-            const timeDiff = game.firstBuzzTime ? buzzTime - game.firstBuzzTime : 0;
-
-            game.buzzes.push({
-                playerId: currentPlayer.id,
-                playerName: currentPlayer.name,
-                time: buzzTime,
-                timeDiff: timeDiff
+                const gameData = snapshot.val();
+                
+                if (window.isHost) {
+                    updateHostView(gameData);
+                } else {
+                    updatePlayerView(gameData);
+                }
             });
-
-            button.disabled = true;
-            button.textContent = 'BUZZED!';
-
-            if (game.buzzes.length === 1) {
-                indicator.textContent = '🔴 YOU BUZZED FIRST!';
-                indicator.className = 'buzz-indicator first-buzz';
-            } else {
-                const diffSeconds = (timeDiff / 1000).toFixed(3);
-                indicator.textContent = `⚡ Buzzed! +${diffSeconds}s after first`;
-                indicator.className = 'buzz-indicator';
-            }
-
-            updatePlayerView();
-            setTimeout(() => {
-                if (isHost) updateHostView();
-            }, 100);
         }
 
-        function updateHostView() {
-            if (!currentGame) return;
-
-            const game = games[currentGame];
+        // Update host view
+        function updateHostView(gameData) {
             const grid = document.getElementById('playersGrid');
-            document.getElementById('playerCount').textContent = game.players.length;
+            const players = gameData.players || {};
+            const buzzes = gameData.buzzes || {};
+
+            document.getElementById('playerCount').textContent = Object.keys(players).length;
 
             grid.innerHTML = '';
 
-            game.players.forEach(player => {
-                const buzz = game.buzzes.find(b => b.playerId === player.id);
+            Object.entries(players).forEach(([playerId, playerData]) => {
+                const buzz = buzzes[playerId];
                 const card = document.createElement('div');
                 card.className = 'player-card';
 
@@ -809,23 +866,30 @@
                 let timeDiffHTML = '';
 
                 if (buzz) {
-                    if (game.buzzes.indexOf(buzz) === 0) {
+                    const buzzesArray = Object.entries(buzzes)
+                        .map(([id, data]) => ({ id, ...data }))
+                        .sort((a, b) => a.time - b.time);
+                    
+                    const buzzIndex = buzzesArray.findIndex(b => b.id === playerId);
+
+                    if (buzzIndex === 0) {
                         card.classList.add('buzzed-first');
                         statusText = '🔴 FIRST!';
                     } else {
                         card.classList.add('buzzed');
-                        const diffSeconds = (buzz.timeDiff / 1000).toFixed(3);
+                        const diffMs = buzz.time - gameData.firstBuzzTime;
+                        const diffSeconds = (diffMs / 1000).toFixed(3);
                         statusText = '⚡ Buzzed';
                         timeDiffHTML = `<div class="time-diff">+${diffSeconds}s</div>`;
                     }
                 }
 
-                const initials = player.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+                const initials = playerData.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
 
                 card.innerHTML = `
                     ${timeDiffHTML}
                     <div class="player-avatar">${initials}</div>
-                    <div class="player-name">${player.name}</div>
+                    <div class="player-name">${playerData.name}</div>
                     <div class="player-status">${statusText}</div>
                 `;
 
@@ -833,21 +897,57 @@
             });
         }
 
-        function updatePlayerView() {
-            if (!currentGame) return;
-
-            const game = games[currentGame];
+        // Update player view
+        function updatePlayerView(gameData) {
+            const buzzes = gameData.buzzes || {};
             const leaderboard = document.getElementById('leaderboard');
+            const button = document.getElementById('buzzButton');
+            const indicator = document.getElementById('buzzIndicator');
 
+            // Check if current player has buzzed
+            const myBuzz = buzzes[window.currentPlayer.id];
+            
+            if (myBuzz) {
+                button.disabled = true;
+                button.textContent = 'BUZZED!';
+
+                const buzzesArray = Object.entries(buzzes)
+                    .map(([id, data]) => ({ id, ...data }))
+                    .sort((a, b) => a.time - b.time);
+                
+                const myIndex = buzzesArray.findIndex(b => b.id === window.currentPlayer.id);
+
+                if (myIndex === 0) {
+                    indicator.textContent = '🔴 YOU BUZZED FIRST!';
+                    indicator.className = 'buzz-indicator first-buzz';
+                } else {
+                    const diffMs = myBuzz.time - gameData.firstBuzzTime;
+                    const diffSeconds = (diffMs / 1000).toFixed(3);
+                    indicator.textContent = `⚡ Buzzed! +${diffSeconds}s after first`;
+                    indicator.className = 'buzz-indicator';
+                }
+            } else {
+                button.disabled = false;
+                button.textContent = 'BUZZ!';
+                indicator.textContent = 'Ready to buzz!';
+                indicator.className = 'buzz-indicator';
+            }
+
+            // Update leaderboard
             leaderboard.innerHTML = '';
 
-            game.buzzes.forEach((buzz, index) => {
+            const buzzesArray = Object.entries(buzzes)
+                .map(([id, data]) => ({ id, ...data }))
+                .sort((a, b) => a.time - b.time);
+
+            buzzesArray.forEach((buzz, index) => {
                 const item = document.createElement('div');
                 item.className = 'leaderboard-item';
 
                 let timeDisplay = 'FIRST';
                 if (index > 0) {
-                    const diffSeconds = (buzz.timeDiff / 1000).toFixed(3);
+                    const diffMs = buzz.time - gameData.firstBuzzTime;
+                    const diffSeconds = (diffMs / 1000).toFixed(3);
                     timeDisplay = `+${diffSeconds}s`;
                 }
 
@@ -861,51 +961,80 @@
             });
         }
 
-        function resetBuzzers() {
-            if (!currentGame || !isHost) return;
+        // Buzz action
+        window.buzz = async function() {
+            if (!window.currentGame || !window.currentPlayer) return;
 
-            const game = games[currentGame];
-            game.buzzes = [];
-            game.firstBuzzTime = null;
+            const gameRef = ref(database, `games/${window.currentGame}`);
+            const snapshot = await get(gameRef);
+            
+            if (!snapshot.exists()) return;
 
-            updateHostView();
+            const gameData = snapshot.val();
+            const buzzes = gameData.buzzes || {};
 
-            // In a real app, broadcast reset to all players
-            alert('Buzzers reset! Players can buzz again.');
-        }
+            // Check if already buzzed
+            if (buzzes[window.currentPlayer.id]) return;
 
-        function endGame() {
-            if (!currentGame) return;
+            const buzzTime = Date.now();
+
+            // Update first buzz time if needed
+            const updates = {};
+            if (!gameData.firstBuzzTime) {
+                updates[`games/${window.currentGame}/firstBuzzTime`] = buzzTime;
+            }
+
+            // Add buzz
+            updates[`games/${window.currentGame}/buzzes/${window.currentPlayer.id}`] = {
+                playerName: window.currentPlayer.name,
+                time: buzzTime
+            };
+
+            await update(ref(database), updates);
+        };
+
+        // Reset buzzers
+        window.resetBuzzers = async function() {
+            if (!window.currentGame || !window.isHost) return;
+
+            if (confirm('Reset all buzzers?')) {
+                const updates = {};
+                updates[`games/${window.currentGame}/buzzes`] = null;
+                updates[`games/${window.currentGame}/firstBuzzTime`] = null;
+                await update(ref(database), updates);
+            }
+        };
+
+        // End game
+        window.endGame = async function() {
+            if (!window.currentGame) return;
 
             if (confirm('Are you sure you want to end this game?')) {
-                delete games[currentGame];
-                currentGame = null;
-                currentPlayer = null;
-                isHost = false;
+                await remove(ref(database, `games/${window.currentGame}`));
+                cleanupListeners();
+                window.currentGame = null;
+                window.currentPlayer = null;
+                window.isHost = false;
                 showModeScreen();
             }
-        }
+        };
 
-        function leaveGame() {
-            if (!currentGame || !currentPlayer) return;
+        // Leave game
+        window.leaveGame = async function() {
+            if (!window.currentGame || !window.currentPlayer) return;
 
             if (confirm('Are you sure you want to leave this game?')) {
-                const game = games[currentGame];
-                game.players = game.players.filter(p => p.id !== currentPlayer.id);
-                game.buzzes = game.buzzes.filter(b => b.playerId !== currentPlayer.id);
-
-                currentGame = null;
-                currentPlayer = null;
+                // Remove player
+                await remove(ref(database, `games/${window.currentGame}/players/${window.currentPlayer.id}`));
+                // Remove buzz if exists
+                await remove(ref(database, `games/${window.currentGame}/buzzes/${window.currentPlayer.id}`));
+                
+                cleanupListeners();
+                window.currentGame = null;
+                window.currentPlayer = null;
                 showModeScreen();
             }
-        }
-
-        // Simulate real-time updates (in real app, use WebSocket)
-        setInterval(() => {
-            if (currentGame && !isHost) {
-                updatePlayerView();
-            }
-        }, 1000);
+        };
     </script>
 </body>
 </html>
