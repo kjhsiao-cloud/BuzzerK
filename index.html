@@ -628,14 +628,16 @@
 
         .score-table .correct-mark {
             color: #00ff88;
-            font-size: 1.8rem;
+            font-size: 1.5rem;
             font-weight: 900;
+            display: inline-block;
         }
 
         .score-table .incorrect-mark {
             color: var(--danger-red);
-            font-size: 1.8rem;
+            font-size: 1.5rem;
             font-weight: 900;
+            display: inline-block;
         }
 
         .question-info {
@@ -1184,9 +1186,21 @@
 
             const gameData = snapshot.val();
             const currentQ = gameData.currentQuestion || 1;
+            const buzzes = gameData.buzzes || {};
+
+            // Find buzz order
+            const buzzesArray = Object.entries(buzzes)
+                .map(([id, data]) => ({ id, ...data }))
+                .sort((a, b) => a.time - b.time);
+            
+            const buzzIndex = buzzesArray.findIndex(b => b.id === playerId);
+            const buzzOrder = buzzIndex + 1; // 1st, 2nd, 3rd, etc.
 
             const updates = {};
-            updates[`games/${window.currentGame}/scores/Q${currentQ}/${playerId}`] = isCorrect;
+            updates[`games/${window.currentGame}/scores/Q${currentQ}/${playerId}`] = {
+                correct: isCorrect,
+                order: buzzOrder
+            };
 
             await update(ref(database), updates);
         };
@@ -1223,11 +1237,22 @@
                 Object.entries(players).forEach(([playerId, playerData]) => {
                     const cell = document.createElement('td');
                     const questionScores = scores[`Q${q}`] || {};
+                    const playerScore = questionScores[playerId];
                     
-                    if (questionScores[playerId] === true) {
-                        cell.innerHTML = '<span class="correct-mark">O</span>';
-                    } else if (questionScores[playerId] === false) {
-                        cell.innerHTML = '<span class="incorrect-mark">X</span>';
+                    if (playerScore !== undefined && playerScore !== null) {
+                        // Handle new format (object with correct and order)
+                        if (typeof playerScore === 'object') {
+                            const mark = playerScore.correct ? 'O' : 'X';
+                            const markClass = playerScore.correct ? 'correct-mark' : 'incorrect-mark';
+                            const order = getOrdinal(playerScore.order);
+                            cell.innerHTML = `<span class="${markClass}">${mark}-${order}</span>`;
+                        } 
+                        // Handle old format (just boolean) - backward compatibility
+                        else {
+                            const mark = playerScore ? 'O' : 'X';
+                            const markClass = playerScore ? 'correct-mark' : 'incorrect-mark';
+                            cell.innerHTML = `<span class="${markClass}">${mark}</span>`;
+                        }
                     } else {
                         cell.textContent = '-';
                     }
@@ -1237,6 +1262,13 @@
 
                 body.appendChild(row);
             }
+        }
+
+        // Helper function to get ordinal (1st, 2nd, 3rd, etc.)
+        function getOrdinal(n) {
+            const s = ["th", "st", "nd", "rd"];
+            const v = n % 100;
+            return n + (s[(v - 20) % 10] || s[v] || s[0]);
         }
 
         // Next question
