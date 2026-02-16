@@ -387,7 +387,7 @@
             width: 300px;
             height: 300px;
             border-radius: 50%;
-            background: linear-gradient(135deg, var(--neon-pink), var(--danger-red));
+            background: linear-gradient(135deg, #00ff88, #00cc66);
             border: 8px solid var(--gold);
             font-family: 'Orbitron', sans-serif;
             font-size: 3rem;
@@ -396,14 +396,14 @@
             cursor: pointer;
             margin: 3rem auto;
             display: block;
-            transition: all 0.2s ease;
-            box-shadow: 0 10px 40px rgba(255, 0, 110, 0.5);
+            transition: all 0.3s ease;
+            box-shadow: 0 10px 40px rgba(0, 255, 136, 0.5);
             text-transform: uppercase;
         }
 
         .buzz-btn:hover:not(:disabled) {
             transform: scale(1.05);
-            box-shadow: 0 15px 60px rgba(255, 0, 110, 0.7);
+            box-shadow: 0 15px 60px rgba(0, 255, 136, 0.7);
         }
 
         .buzz-btn:active:not(:disabled) {
@@ -411,10 +411,30 @@
         }
 
         .buzz-btn:disabled {
-            background: linear-gradient(135deg, #555, #333);
-            border-color: #666;
             cursor: not-allowed;
-            opacity: 0.5;
+            opacity: 0.9;
+        }
+
+        .buzz-btn.buzzed-first {
+            background: var(--danger-red);
+            border-color: var(--danger-red);
+            box-shadow: 0 10px 40px rgba(255, 0, 84, 0.6);
+            animation: pulseBuzzBtn 1.5s ease-in-out infinite;
+        }
+
+        @keyframes pulseBuzzBtn {
+            0%, 100% {
+                box-shadow: 0 10px 40px rgba(255, 0, 84, 0.6);
+            }
+            50% {
+                box-shadow: 0 10px 60px rgba(255, 0, 84, 0.9);
+            }
+        }
+
+        .buzz-btn.buzzed-other {
+            background: var(--soft-blue);
+            border-color: var(--soft-blue);
+            box-shadow: 0 10px 40px rgba(74, 144, 226, 0.5);
         }
 
         .controls {
@@ -652,15 +672,6 @@
                     <div style="font-family: 'Orbitron', sans-serif; font-size: 2rem; color: var(--gold);" id="playerGameCode">----</div>
                 </div>
 
-                <!-- Player Icon Display -->
-                <div style="display: flex; justify-content: center; margin-bottom: 2rem;">
-                    <div id="playerIcon" class="player-card" style="max-width: 250px;">
-                        <div class="player-avatar" id="playerAvatar">?</div>
-                        <div class="player-name" id="playerDisplayName">You</div>
-                        <div class="player-status" id="playerStatus">Waiting...</div>
-                    </div>
-                </div>
-
                 <div class="buzz-indicator" id="buzzIndicator">
                     Ready to buzz!
                 </div>
@@ -696,6 +707,8 @@
             messagingSenderId: "677604722241",
             appId: "1:677604722241:web:8f694d4f6357bc0812e8c0"
         };
+
+
 
         // Initialize Firebase
         const app = initializeApp(firebaseConfig);
@@ -905,21 +918,12 @@
             const leaderboard = document.getElementById('leaderboard');
             const button = document.getElementById('buzzButton');
             const indicator = document.getElementById('buzzIndicator');
-            const playerIcon = document.getElementById('playerIcon');
-            const playerAvatar = document.getElementById('playerAvatar');
-            const playerDisplayName = document.getElementById('playerDisplayName');
-            const playerStatus = document.getElementById('playerStatus');
-
-            // Set player name and initials
-            const initials = window.currentPlayer.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
-            playerAvatar.textContent = initials;
-            playerDisplayName.textContent = window.currentPlayer.name;
 
             // Check if current player has buzzed
             const myBuzz = buzzes[window.currentPlayer.id];
             
-            // Reset icon classes
-            playerIcon.className = 'player-card';
+            // Reset button classes
+            button.className = 'buzz-btn';
             
             if (myBuzz) {
                 button.disabled = true;
@@ -932,24 +936,22 @@
                 const myIndex = buzzesArray.findIndex(b => b.id === window.currentPlayer.id);
 
                 if (myIndex === 0) {
-                    // First buzzer - RED
-                    playerIcon.classList.add('buzzed-first');
-                    playerStatus.textContent = '🔴 FIRST!';
+                    // First buzzer - turn RED
+                    button.classList.add('buzzed-first');
                     indicator.textContent = '🔴 YOU BUZZED FIRST!';
                     indicator.className = 'buzz-indicator first-buzz';
                 } else {
-                    // Other buzzers - BLUE with time difference
-                    playerIcon.classList.add('buzzed');
+                    // Other buzzers - turn BLUE
+                    button.classList.add('buzzed-other');
                     const diffMs = myBuzz.time - gameData.firstBuzzTime;
                     const diffSeconds = (diffMs / 1000).toFixed(3);
-                    playerStatus.innerHTML = `⚡ Buzzed<br><span style="font-size: 0.8rem;">+${diffSeconds}s</span>`;
                     indicator.textContent = `⚡ Buzzed! +${diffSeconds}s after first`;
                     indicator.className = 'buzz-indicator';
                 }
             } else {
+                // Not buzzed yet - stay GREEN
                 button.disabled = false;
                 button.textContent = 'BUZZ!';
-                playerStatus.textContent = 'Waiting...';
                 indicator.textContent = 'Ready to buzz!';
                 indicator.className = 'buzz-indicator';
             }
