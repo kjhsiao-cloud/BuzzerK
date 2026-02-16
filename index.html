@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BuzzRush - Real-time Buzzer Game</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --electric-blue: #00d4ff;
+            --neon-pink: #ff006e;
+            --danger-red: #ff0054;
+            --deep-purple: #1a0033;
+            --mid-purple: #2d1b4e;
+            --soft-blue: #4a90e2;
+            --gold: #ffd700;
+            --dark-bg: #0a0015;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'JetBrains Mono', monospace;
+            background: linear-gradient(135deg, var(--dark-bg) 0%, var(--deep-purple) 50%, var(--mid-purple) 100%);
+            color: white;
+            min-height: 100vh;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                radial-gradient(circle at 20% 30%, rgba(0, 212, 255, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 80% 70%, rgba(255, 0, 110, 0.1) 0%, transparent 50%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 3rem;
+            animation: slideDown 0.8s ease-out;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        h1 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 5rem;
+            font-weight: 900;
+            background: linear-gradient(135deg, var(--electric-blue), var(--neon-pink), var(--gold));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 0.5rem;
+            letter-spacing: 0.05em;
+            text-shadow: 0 0 40px rgba(0, 212, 255, 0.3);
+            animation: glow 2s ease-in-out infinite alternate;
+        }
+
+        @keyframes glow {
+            from {
+                filter: drop-shadow(0 0 10px rgba(0, 212, 255, 0.5));
+            }
+            to {
+                filter: drop-shadow(0 0 30px rgba(255, 0, 110, 0.5));
+            }
+        }
+
+        .tagline {
+            font-size: 1.2rem;
+            color: var(--electric-blue);
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+        }
+
+        .mode-selector {
+            display: flex;
+            gap: 2rem;
+            justify-content: center;
+            margin-bottom: 3rem;
+            animation: fadeIn 1s ease-out 0.3s both;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .mode-btn {
+            padding: 1.5rem 3rem;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.3rem;
+            font-weight: 700;
+            border: 3px solid var(--electric-blue);
+            background: rgba(0, 212, 255, 0.1);
+            color: var(--electric-blue);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        .mode-btn::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            background: var(--electric-blue);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            transition: width 0.6s ease, height 0.6s ease;
+        }
+
+        .mode-btn:hover::before {
+            width: 300px;
+            height: 300px;
+        }
+
+        .mode-btn:hover {
+            color: var(--dark-bg);
+            border-color: var(--electric-blue);
+            box-shadow: 0 0 30px rgba(0, 212, 255, 0.5);
+        }
+
+        .mode-btn span {
+            position: relative;
+            z-index: 1;
+        }
+
+        .screen {
+            display: none;
+            animation: fadeIn 0.5s ease-out;
+        }
+
+        .screen.active {
+            display: block;
+        }
+
+        .game-card {
+            background: rgba(45, 27, 78, 0.6);
+            backdrop-filter: blur(20px);
+            border: 2px solid rgba(0, 212, 255, 0.3);
+            border-radius: 20px;
+            padding: 3rem;
+            box-shadow: 0 10px 50px rgba(0, 0, 0, 0.5);
+            animation: fadeIn 0.8s ease-out 0.2s both;
+        }
+
+        .form-group {
+            margin-bottom: 2rem;
+        }
+
+        label {
+            display: block;
+            font-size: 1rem;
+            color: var(--electric-blue);
+            margin-bottom: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            font-weight: 600;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 1.2rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1.1rem;
+            background: rgba(10, 0, 21, 0.7);
+            border: 2px solid rgba(0, 212, 255, 0.5);
+            border-radius: 10px;
+            color: white;
+            transition: all 0.3s ease;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: var(--electric-blue);
+            box-shadow: 0 0 20px rgba(0, 212, 255, 0.3);
+        }
+
+        .btn-primary {
+            width: 100%;
+            padding: 1.5rem;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.3rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--neon-pink), var(--danger-red));
+            border: none;
+            border-radius: 10px;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-primary::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+            transition: left 0.5s ease;
+        }
+
+        .btn-primary:hover::before {
+            left: 100%;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(255, 0, 110, 0.5);
+        }
+
+        .game-code-display {
+            text-align: center;
+            padding: 2rem;
+            background: rgba(0, 212, 255, 0.1);
+            border: 3px dashed var(--electric-blue);
+            border-radius: 15px;
+            margin: 2rem 0;
+        }
+
+        .game-code {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 4rem;
+            font-weight: 900;
+            color: var(--gold);
+            letter-spacing: 0.3em;
+            text-shadow: 0 0 20px rgba(255, 215, 0, 0.5);
+        }
+
+        .players-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 1.5rem;
+            margin: 2rem 0;
+        }
+
+        .player-card {
+            background: rgba(10, 0, 21, 0.7);
+            border: 2px solid rgba(74, 144, 226, 0.5);
+            border-radius: 15px;
+            padding: 1.5rem;
+            text-align: center;
+            transition: all 0.3s ease;
+            animation: popIn 0.4s ease-out;
+            position: relative;
+        }
+
+        @keyframes popIn {
+            from {
+                opacity: 0;
+                transform: scale(0.8);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        .player-card.buzzed-first {
+            border-color: var(--danger-red);
+            background: rgba(255, 0, 84, 0.15);
+            box-shadow: 0 0 30px rgba(255, 0, 84, 0.4);
+            animation: pulse 0.5s ease-in-out;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.05);
+            }
+        }
+
+        .player-card.buzzed {
+            border-color: var(--soft-blue);
+            background: rgba(74, 144, 226, 0.15);
+        }
+
+        .player-avatar {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            margin: 0 auto 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--electric-blue), var(--neon-pink));
+            color: white;
+            transition: all 0.3s ease;
+        }
+
+        .player-card.buzzed-first .player-avatar {
+            background: var(--danger-red);
+            box-shadow: 0 0 30px rgba(255, 0, 84, 0.6);
+            animation: rotate 2s linear infinite;
+        }
+
+        @keyframes rotate {
+            from {
+                transform: rotate(0deg);
+            }
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .player-card.buzzed .player-avatar {
+            background: var(--soft-blue);
+        }
+
+        .player-name {
+            font-weight: 600;
+            font-size: 1.1rem;
+            margin-bottom: 0.5rem;
+            color: white;
+        }
+
+        .player-status {
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.6);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        .time-diff {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(74, 144, 226, 0.9);
+            color: white;
+            padding: 0.3rem 0.8rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        .buzz-btn {
+            width: 300px;
+            height: 300px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--neon-pink), var(--danger-red));
+            border: 8px solid var(--gold);
+            font-family: 'Orbitron', sans-serif;
+            font-size: 3rem;
+            font-weight: 900;
+            color: white;
+            cursor: pointer;
+            margin: 3rem auto;
+            display: block;
+            transition: all 0.2s ease;
+            box-shadow: 0 10px 40px rgba(255, 0, 110, 0.5);
+            text-transform: uppercase;
+        }
+
+        .buzz-btn:hover:not(:disabled) {
+            transform: scale(1.05);
+            box-shadow: 0 15px 60px rgba(255, 0, 110, 0.7);
+        }
+
+        .buzz-btn:active:not(:disabled) {
+            transform: scale(0.95);
+        }
+
+        .buzz-btn:disabled {
+            background: linear-gradient(135deg, #555, #333);
+            border-color: #666;
+            cursor: not-allowed;
+            opacity: 0.5;
+        }
+
+        .controls {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            margin-top: 2rem;
+        }
+
+        .btn-secondary {
+            padding: 1rem 2rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1rem;
+            font-weight: 600;
+            background: rgba(0, 212, 255, 0.2);
+            border: 2px solid var(--electric-blue);
+            border-radius: 10px;
+            color: var(--electric-blue);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+        }
+
+        .btn-secondary:hover {
+            background: var(--electric-blue);
+            color: var(--dark-bg);
+            box-shadow: 0 5px 20px rgba(0, 212, 255, 0.4);
+        }
+
+        .info-banner {
+            background: rgba(255, 215, 0, 0.1);
+            border: 2px solid var(--gold);
+            border-radius: 10px;
+            padding: 1rem 1.5rem;
+            margin: 2rem 0;
+            text-align: center;
+            color: var(--gold);
+            font-weight: 600;
+        }
+
+        .buzz-indicator {
+            text-align: center;
+            font-size: 1.5rem;
+            margin: 2rem 0;
+            min-height: 40px;
+        }
+
+        .buzz-indicator.first-buzz {
+            color: var(--danger-red);
+            font-weight: 700;
+            animation: flashText 0.5s ease-in-out;
+        }
+
+        @keyframes flashText {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.3;
+            }
+        }
+
+        .leaderboard {
+            margin-top: 2rem;
+        }
+
+        .leaderboard-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(10, 0, 21, 0.7);
+            border: 2px solid rgba(74, 144, 226, 0.3);
+            border-radius: 10px;
+            padding: 1rem 1.5rem;
+            margin-bottom: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .leaderboard-item:first-child {
+            border-color: var(--danger-red);
+            background: rgba(255, 0, 84, 0.15);
+        }
+
+        .leaderboard-rank {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.5rem;
+            font-weight: 900;
+            color: var(--gold);
+            min-width: 50px;
+        }
+
+        .leaderboard-name {
+            flex: 1;
+            font-size: 1.2rem;
+            font-weight: 600;
+        }
+
+        .leaderboard-time {
+            color: var(--electric-blue);
+            font-size: 1rem;
+        }
+
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 3rem;
+            }
+
+            .mode-selector {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .mode-btn {
+                width: 100%;
+                max-width: 300px;
+            }
+
+            .buzz-btn {
+                width: 200px;
+                height: 200px;
+                font-size: 2rem;
+            }
+
+            .players-grid {
+                grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>BuzzRush</h1>
+            <div class="tagline">Lightning-Fast Buzzer Action</div>
+        </header>
+
+        <!-- Mode Selection Screen -->
+        <div id="modeScreen" class="screen active">
+            <div class="mode-selector">
+                <button class="mode-btn" onclick="showHostScreen()">
+                    <span>🎮 Host Game</span>
+                </button>
+                <button class="mode-btn" onclick="showJoinScreen()">
+                    <span>⚡ Join Game</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Host Screen -->
+        <div id="hostScreen" class="screen">
+            <div class="game-card">
+                <h2 style="text-align: center; margin-bottom: 2rem; font-family: 'Orbitron', sans-serif; color: var(--electric-blue);">HOST A GAME</h2>
+                <div class="form-group">
+                    <label for="hostName">Your Name</label>
+                    <input type="text" id="hostName" placeholder="Enter your name">
+                </div>
+                <button class="btn-primary" onclick="createGame()">
+                    <span>Create Game</span>
+                </button>
+                <div class="controls">
+                    <button class="btn-secondary" onclick="showModeScreen()">Back</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Join Screen -->
+        <div id="joinScreen" class="screen">
+            <div class="game-card">
+                <h2 style="text-align: center; margin-bottom: 2rem; font-family: 'Orbitron', sans-serif; color: var(--electric-blue);">JOIN A GAME</h2>
+                <div class="form-group">
+                    <label for="playerName">Your Name</label>
+                    <input type="text" id="playerName" placeholder="Enter your name">
+                </div>
+                <div class="form-group">
+                    <label for="gameCode">Game Code</label>
+                    <input type="text" id="gameCode" placeholder="Enter 4-digit code" maxlength="4">
+                </div>
+                <button class="btn-primary" onclick="joinGame()">
+                    <span>Join Game</span>
+                </button>
+                <div class="controls">
+                    <button class="btn-secondary" onclick="showModeScreen()">Back</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Host Game Screen -->
+        <div id="hostGameScreen" class="screen">
+            <div class="game-card">
+                <div class="game-code-display">
+                    <div style="font-size: 1.2rem; color: var(--electric-blue); margin-bottom: 0.5rem; letter-spacing: 0.2em;">GAME CODE</div>
+                    <div class="game-code" id="displayGameCode">----</div>
+                </div>
+
+                <div class="info-banner">
+                    Players can join using this code. Press "Reset" to allow new buzzes.
+                </div>
+
+                <h3 style="text-align: center; margin: 2rem 0 1rem; font-family: 'Orbitron', sans-serif; color: var(--electric-blue);">
+                    PLAYERS (<span id="playerCount">0</span>)
+                </h3>
+                <div class="players-grid" id="playersGrid"></div>
+
+                <div class="controls">
+                    <button class="btn-secondary" onclick="resetBuzzers()">🔄 Reset Buzzers</button>
+                    <button class="btn-secondary" onclick="endGame()">❌ End Game</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Player Game Screen -->
+        <div id="playerGameScreen" class="screen">
+            <div class="game-card">
+                <div style="text-align: center; margin-bottom: 2rem;">
+                    <div style="font-size: 1rem; color: var(--electric-blue); margin-bottom: 0.5rem; letter-spacing: 0.2em;">GAME CODE</div>
+                    <div style="font-family: 'Orbitron', sans-serif; font-size: 2rem; color: var(--gold);" id="playerGameCode">----</div>
+                </div>
+
+                <div class="buzz-indicator" id="buzzIndicator">
+                    Ready to buzz!
+                </div>
+
+                <button class="buzz-btn" id="buzzButton" onclick="buzz()">
+                    BUZZ!
+                </button>
+
+                <h3 style="text-align: center; margin: 2rem 0 1rem; font-family: 'Orbitron', sans-serif; color: var(--electric-blue);">
+                    LEADERBOARD
+                </h3>
+                <div class="leaderboard" id="leaderboard"></div>
+
+                <div class="controls">
+                    <button class="btn-secondary" onclick="leaveGame()">Leave Game</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Simulated backend storage (in real app, use WebSocket/Firebase/etc)
+        let games = {};
+        let currentGame = null;
+        let currentPlayer = null;
+        let isHost = false;
+
+        function showModeScreen() {
+            hideAllScreens();
+            document.getElementById('modeScreen').classList.add('active');
+        }
+
+        function showHostScreen() {
+            hideAllScreens();
+            document.getElementById('hostScreen').classList.add('active');
+        }
+
+        function showJoinScreen() {
+            hideAllScreens();
+            document.getElementById('joinScreen').classList.add('active');
+        }
+
+        function hideAllScreens() {
+            document.querySelectorAll('.screen').forEach(screen => {
+                screen.classList.remove('active');
+            });
+        }
+
+        function generateGameCode() {
+            return Math.floor(1000 + Math.random() * 9000).toString();
+        }
+
+        function createGame() {
+            const hostName = document.getElementById('hostName').value.trim();
+            if (!hostName) {
+                alert('Please enter your name');
+                return;
+            }
+
+            const code = generateGameCode();
+            currentGame = code;
+            isHost = true;
+
+            games[code] = {
+                host: hostName,
+                players: [],
+                buzzes: [],
+                firstBuzzTime: null
+            };
+
+            document.getElementById('displayGameCode').textContent = code;
+            hideAllScreens();
+            document.getElementById('hostGameScreen').classList.add('active');
+            updateHostView();
+        }
+
+        function joinGame() {
+            const playerName = document.getElementById('playerName').value.trim();
+            const gameCode = document.getElementById('gameCode').value.trim();
+
+            if (!playerName) {
+                alert('Please enter your name');
+                return;
+            }
+
+            if (!gameCode || gameCode.length !== 4) {
+                alert('Please enter a valid 4-digit game code');
+                return;
+            }
+
+            if (!games[gameCode]) {
+                alert('Game not found. Please check the code.');
+                return;
+            }
+
+            currentGame = gameCode;
+            currentPlayer = {
+                name: playerName,
+                id: Date.now().toString()
+            };
+            isHost = false;
+
+            // Add player to game
+            games[gameCode].players.push(currentPlayer);
+
+            document.getElementById('playerGameCode').textContent = gameCode;
+            hideAllScreens();
+            document.getElementById('playerGameScreen').classList.add('active');
+            updatePlayerView();
+        }
+
+        function buzz() {
+            if (!currentGame || !currentPlayer) return;
+
+            const game = games[currentGame];
+            const button = document.getElementById('buzzButton');
+            const indicator = document.getElementById('buzzIndicator');
+
+            // Check if already buzzed
+            if (game.buzzes.some(b => b.playerId === currentPlayer.id)) {
+                return;
+            }
+
+            const buzzTime = Date.now();
+
+            // Record first buzz time if this is the first
+            if (game.buzzes.length === 0) {
+                game.firstBuzzTime = buzzTime;
+            }
+
+            // Calculate time difference from first buzz
+            const timeDiff = game.firstBuzzTime ? buzzTime - game.firstBuzzTime : 0;
+
+            game.buzzes.push({
+                playerId: currentPlayer.id,
+                playerName: currentPlayer.name,
+                time: buzzTime,
+                timeDiff: timeDiff
+            });
+
+            button.disabled = true;
+            button.textContent = 'BUZZED!';
+
+            if (game.buzzes.length === 1) {
+                indicator.textContent = '🔴 YOU BUZZED FIRST!';
+                indicator.className = 'buzz-indicator first-buzz';
+            } else {
+                const diffSeconds = (timeDiff / 1000).toFixed(3);
+                indicator.textContent = `⚡ Buzzed! +${diffSeconds}s after first`;
+                indicator.className = 'buzz-indicator';
+            }
+
+            updatePlayerView();
+            setTimeout(() => {
+                if (isHost) updateHostView();
+            }, 100);
+        }
+
+        function updateHostView() {
+            if (!currentGame) return;
+
+            const game = games[currentGame];
+            const grid = document.getElementById('playersGrid');
+            document.getElementById('playerCount').textContent = game.players.length;
+
+            grid.innerHTML = '';
+
+            game.players.forEach(player => {
+                const buzz = game.buzzes.find(b => b.playerId === player.id);
+                const card = document.createElement('div');
+                card.className = 'player-card';
+
+                let statusText = 'Waiting...';
+                let timeDiffHTML = '';
+
+                if (buzz) {
+                    if (game.buzzes.indexOf(buzz) === 0) {
+                        card.classList.add('buzzed-first');
+                        statusText = '🔴 FIRST!';
+                    } else {
+                        card.classList.add('buzzed');
+                        const diffSeconds = (buzz.timeDiff / 1000).toFixed(3);
+                        statusText = '⚡ Buzzed';
+                        timeDiffHTML = `<div class="time-diff">+${diffSeconds}s</div>`;
+                    }
+                }
+
+                const initials = player.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+
+                card.innerHTML = `
+                    ${timeDiffHTML}
+                    <div class="player-avatar">${initials}</div>
+                    <div class="player-name">${player.name}</div>
+                    <div class="player-status">${statusText}</div>
+                `;
+
+                grid.appendChild(card);
+            });
+        }
+
+        function updatePlayerView() {
+            if (!currentGame) return;
+
+            const game = games[currentGame];
+            const leaderboard = document.getElementById('leaderboard');
+
+            leaderboard.innerHTML = '';
+
+            game.buzzes.forEach((buzz, index) => {
+                const item = document.createElement('div');
+                item.className = 'leaderboard-item';
+
+                let timeDisplay = 'FIRST';
+                if (index > 0) {
+                    const diffSeconds = (buzz.timeDiff / 1000).toFixed(3);
+                    timeDisplay = `+${diffSeconds}s`;
+                }
+
+                item.innerHTML = `
+                    <div class="leaderboard-rank">#${index + 1}</div>
+                    <div class="leaderboard-name">${buzz.playerName}</div>
+                    <div class="leaderboard-time">${timeDisplay}</div>
+                `;
+
+                leaderboard.appendChild(item);
+            });
+        }
+
+        function resetBuzzers() {
+            if (!currentGame || !isHost) return;
+
+            const game = games[currentGame];
+            game.buzzes = [];
+            game.firstBuzzTime = null;
+
+            updateHostView();
+
+            // In a real app, broadcast reset to all players
+            alert('Buzzers reset! Players can buzz again.');
+        }
+
+        function endGame() {
+            if (!currentGame) return;
+
+            if (confirm('Are you sure you want to end this game?')) {
+                delete games[currentGame];
+                currentGame = null;
+                currentPlayer = null;
+                isHost = false;
+                showModeScreen();
+            }
+        }
+
+        function leaveGame() {
+            if (!currentGame || !currentPlayer) return;
+
+            if (confirm('Are you sure you want to leave this game?')) {
+                const game = games[currentGame];
+                game.players = game.players.filter(p => p.id !== currentPlayer.id);
+                game.buzzes = game.buzzes.filter(b => b.playerId !== currentPlayer.id);
+
+                currentGame = null;
+                currentPlayer = null;
+                showModeScreen();
+            }
+        }
+
+        // Simulate real-time updates (in real app, use WebSocket)
+        setInterval(() => {
+            if (currentGame && !isHost) {
+                updatePlayerView();
+            }
+        }, 1000);
+    </script>
+</body>
+</html>
