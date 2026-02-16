@@ -538,6 +538,114 @@
             font-size: 1rem;
         }
 
+        .score-buttons {
+            display: flex;
+            gap: 0.5rem;
+            justify-content: center;
+            margin-top: 0.5rem;
+        }
+
+        .score-btn {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            font-size: 1.5rem;
+            font-weight: 900;
+            border: 3px solid;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-family: 'Orbitron', sans-serif;
+        }
+
+        .score-btn.correct-btn {
+            background: rgba(0, 255, 136, 0.2);
+            border-color: #00ff88;
+            color: #00ff88;
+        }
+
+        .score-btn.correct-btn:hover {
+            background: #00ff88;
+            color: var(--dark-bg);
+            transform: scale(1.1);
+        }
+
+        .score-btn.incorrect-btn {
+            background: rgba(255, 0, 84, 0.2);
+            border-color: var(--danger-red);
+            color: var(--danger-red);
+        }
+
+        .score-btn.incorrect-btn:hover {
+            background: var(--danger-red);
+            color: white;
+            transform: scale(1.1);
+        }
+
+        .score-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .score-table-container {
+            margin: 2rem 0;
+            overflow-x: auto;
+        }
+
+        .score-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: rgba(10, 0, 21, 0.7);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .score-table th,
+        .score-table td {
+            padding: 1rem;
+            text-align: center;
+            border: 1px solid rgba(0, 212, 255, 0.3);
+        }
+
+        .score-table th {
+            background: rgba(0, 212, 255, 0.2);
+            color: var(--electric-blue);
+            font-family: 'Orbitron', sans-serif;
+            font-weight: 700;
+            text-transform: uppercase;
+            font-size: 0.9rem;
+        }
+
+        .score-table td {
+            font-size: 1.2rem;
+        }
+
+        .score-table .question-cell {
+            background: rgba(0, 212, 255, 0.1);
+            color: var(--gold);
+            font-weight: 700;
+            font-family: 'Orbitron', sans-serif;
+        }
+
+        .score-table .correct-mark {
+            color: #00ff88;
+            font-size: 1.8rem;
+            font-weight: 900;
+        }
+
+        .score-table .incorrect-mark {
+            color: var(--danger-red);
+            font-size: 1.8rem;
+            font-weight: 900;
+        }
+
+        .question-info {
+            text-align: center;
+            margin: 1rem 0;
+            font-size: 1.2rem;
+            color: var(--gold);
+            font-family: 'Orbitron', sans-serif;
+        }
+
         .loading {
             text-align: center;
             padding: 2rem;
@@ -652,12 +760,32 @@
                     Players can join using this code. Press "Reset" to allow new buzzes.
                 </div>
 
+                <div class="question-info">
+                    Question <span id="currentQuestion">1</span>
+                </div>
+
                 <h3 style="text-align: center; margin: 2rem 0 1rem; font-family: 'Orbitron', sans-serif; color: var(--electric-blue);">
                     PLAYERS (<span id="playerCount">0</span>)
                 </h3>
                 <div class="players-grid" id="playersGrid"></div>
 
+                <h3 style="text-align: center; margin: 2rem 0 1rem; font-family: 'Orbitron', sans-serif; color: var(--electric-blue);">
+                    SCORE TRACKER
+                </h3>
+                <div class="score-table-container">
+                    <table class="score-table" id="scoreTable">
+                        <thead>
+                            <tr id="scoreTableHeader">
+                                <th>Question</th>
+                            </tr>
+                        </thead>
+                        <tbody id="scoreTableBody">
+                        </tbody>
+                    </table>
+                </div>
+
                 <div class="controls">
+                    <button class="btn-secondary" onclick="nextQuestion()">➡️ Next Question</button>
                     <button class="btn-secondary" onclick="resetBuzzers()">🔄 Reset Buzzers</button>
                     <button class="btn-secondary" onclick="endGame()">❌ End Game</button>
                 </div>
@@ -773,7 +901,9 @@
             await set(gameRef, {
                 host: hostName,
                 createdAt: Date.now(),
-                firstBuzzTime: null
+                firstBuzzTime: null,
+                currentQuestion: 1,
+                scores: {}
             });
 
             document.getElementById('displayGameCode').textContent = code;
@@ -867,8 +997,11 @@
             const grid = document.getElementById('playersGrid');
             const players = gameData.players || {};
             const buzzes = gameData.buzzes || {};
+            const scores = gameData.scores || {};
+            const currentQ = gameData.currentQuestion || 1;
 
             document.getElementById('playerCount').textContent = Object.keys(players).length;
+            document.getElementById('currentQuestion').textContent = currentQ;
 
             grid.innerHTML = '';
 
@@ -879,6 +1012,7 @@
 
                 let statusText = 'Waiting...';
                 let timeDiffHTML = '';
+                let scoreButtonsHTML = '';
 
                 if (buzz) {
                     const buzzesArray = Object.entries(buzzes)
@@ -897,6 +1031,25 @@
                         statusText = '⚡ Buzzed';
                         timeDiffHTML = `<div class="time-diff">+${diffSeconds}s</div>`;
                     }
+
+                    // Add O/X buttons for buzzed players
+                    const currentScore = scores[`Q${currentQ}`]?.[playerId];
+                    const isAnswered = currentScore !== undefined;
+                    
+                    scoreButtonsHTML = `
+                        <div class="score-buttons">
+                            <button class="score-btn correct-btn" 
+                                    onclick="markAnswer('${playerId}', true)"
+                                    ${isAnswered ? 'disabled' : ''}>
+                                O
+                            </button>
+                            <button class="score-btn incorrect-btn" 
+                                    onclick="markAnswer('${playerId}', false)"
+                                    ${isAnswered ? 'disabled' : ''}>
+                                X
+                            </button>
+                        </div>
+                    `;
                 }
 
                 const initials = playerData.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
@@ -906,10 +1059,14 @@
                     <div class="player-avatar">${initials}</div>
                     <div class="player-name">${playerData.name}</div>
                     <div class="player-status">${statusText}</div>
+                    ${scoreButtonsHTML}
                 `;
 
                 grid.appendChild(card);
             });
+
+            // Update score table
+            updateScoreTable(gameData);
         }
 
         // Update player view
@@ -1015,6 +1172,93 @@
 
             await update(ref(database), updates);
         };
+
+        // Mark answer as correct or incorrect
+        window.markAnswer = async function(playerId, isCorrect) {
+            if (!window.currentGame || !window.isHost) return;
+
+            const gameRef = ref(database, `games/${window.currentGame}`);
+            const snapshot = await get(gameRef);
+            
+            if (!snapshot.exists()) return;
+
+            const gameData = snapshot.val();
+            const currentQ = gameData.currentQuestion || 1;
+
+            const updates = {};
+            updates[`games/${window.currentGame}/scores/Q${currentQ}/${playerId}`] = isCorrect;
+
+            await update(ref(database), updates);
+        };
+
+        // Update score table
+        function updateScoreTable(gameData) {
+            const players = gameData.players || {};
+            const scores = gameData.scores || {};
+            const currentQ = gameData.currentQuestion || 1;
+
+            const header = document.getElementById('scoreTableHeader');
+            const body = document.getElementById('scoreTableBody');
+
+            // Update header with player names
+            header.innerHTML = '<th>Question</th>';
+            Object.entries(players).forEach(([playerId, playerData]) => {
+                const th = document.createElement('th');
+                th.textContent = playerData.name;
+                header.appendChild(th);
+            });
+
+            // Update body with scores
+            body.innerHTML = '';
+            for (let q = 1; q <= currentQ; q++) {
+                const row = document.createElement('tr');
+                
+                // Question cell
+                const qCell = document.createElement('td');
+                qCell.className = 'question-cell';
+                qCell.textContent = `Q${q}`;
+                row.appendChild(qCell);
+
+                // Score cells for each player
+                Object.entries(players).forEach(([playerId, playerData]) => {
+                    const cell = document.createElement('td');
+                    const questionScores = scores[`Q${q}`] || {};
+                    
+                    if (questionScores[playerId] === true) {
+                        cell.innerHTML = '<span class="correct-mark">O</span>';
+                    } else if (questionScores[playerId] === false) {
+                        cell.innerHTML = '<span class="incorrect-mark">X</span>';
+                    } else {
+                        cell.textContent = '-';
+                    }
+                    
+                    row.appendChild(cell);
+                });
+
+                body.appendChild(row);
+            }
+        }
+
+        // Next question
+        window.nextQuestion = async function() {
+            if (!window.currentGame || !window.isHost) return;
+
+            const gameRef = ref(database, `games/${window.currentGame}`);
+            const snapshot = await get(gameRef);
+            
+            if (!snapshot.exists()) return;
+
+            const gameData = snapshot.val();
+            const nextQ = (gameData.currentQuestion || 1) + 1;
+
+            const updates = {};
+            updates[`games/${window.currentGame}/currentQuestion`] = nextQ;
+            updates[`games/${window.currentGame}/buzzes`] = null;
+            updates[`games/${window.currentGame}/firstBuzzTime`] = null;
+
+            await update(ref(database), updates);
+        };
+
 
         // Reset buzzers
         window.resetBuzzers = async function() {
