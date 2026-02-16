@@ -465,6 +465,34 @@
             box-shadow: 0 5px 20px rgba(0, 212, 255, 0.4);
         }
 
+        .btn-category {
+            padding: 0.8rem 1.5rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1rem;
+            font-weight: 600;
+            background: rgba(255, 215, 0, 0.1);
+            border: 2px solid var(--gold);
+            border-radius: 8px;
+            color: var(--gold);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .btn-category:hover {
+            background: var(--gold);
+            color: var(--dark-bg);
+            box-shadow: 0 5px 20px rgba(255, 215, 0, 0.4);
+            transform: translateY(-2px);
+        }
+
+        .btn-category.selected {
+            background: var(--gold);
+            color: var(--dark-bg);
+            box-shadow: 0 0 20px rgba(255, 215, 0, 0.6);
+        }
+
         .info-banner {
             background: rgba(255, 215, 0, 0.1);
             border: 2px solid var(--gold);
@@ -648,6 +676,43 @@
             font-family: 'Orbitron', sans-serif;
         }
 
+        .subject-buttons {
+            display: flex;
+            gap: 0.8rem;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin: 1.5rem 0;
+        }
+
+        .subject-btn {
+            padding: 0.8rem 1.5rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.95rem;
+            font-weight: 600;
+            background: rgba(0, 212, 255, 0.1);
+            border: 2px solid var(--electric-blue);
+            border-radius: 8px;
+            color: var(--electric-blue);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .subject-btn:hover {
+            background: var(--electric-blue);
+            color: var(--dark-bg);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 212, 255, 0.4);
+        }
+
+        .subject-btn.selected {
+            background: var(--gold);
+            border-color: var(--gold);
+            color: var(--dark-bg);
+            box-shadow: 0 5px 20px rgba(255, 215, 0, 0.5);
+        }
+
         .loading {
             text-align: center;
             padding: 2rem;
@@ -763,7 +828,17 @@
                 </div>
 
                 <div class="question-info">
-                    Question <span id="currentQuestion">1</span>
+                    Question <span id="currentQuestion">1</span><span id="currentSubject"></span>
+                </div>
+
+                <div class="subject-buttons">
+                    <button class="subject-btn" onclick="selectSubject('Math')">Math</button>
+                    <button class="subject-btn" onclick="selectSubject('Biology')">Biology</button>
+                    <button class="subject-btn" onclick="selectSubject('Earth')">Earth</button>
+                    <button class="subject-btn" onclick="selectSubject('Space')">Space</button>
+                    <button class="subject-btn" onclick="selectSubject('Physics')">Physics</button>
+                    <button class="subject-btn" onclick="selectSubject('Chemistry')">Chemistry</button>
+                    <button class="subject-btn" onclick="selectSubject('Energy')">Energy</button>
                 </div>
 
                 <h3 style="text-align: center; margin: 2rem 0 1rem; font-family: 'Orbitron', sans-serif; color: var(--electric-blue);">
@@ -784,6 +859,19 @@
                         <tbody id="scoreTableBody">
                         </tbody>
                     </table>
+                </div>
+
+                <h3 style="text-align: center; margin: 2rem 0 1rem; font-family: 'Orbitron', sans-serif; color: var(--electric-blue);">
+                    SELECT CATEGORY
+                </h3>
+                <div style="display: flex; flex-wrap: wrap; gap: 0.8rem; justify-content: center; margin-bottom: 2rem;">
+                    <button class="btn-category" onclick="setCategory('Math')">📐 Math</button>
+                    <button class="btn-category" onclick="setCategory('Biology')">🧬 Biology</button>
+                    <button class="btn-category" onclick="setCategory('Earth')">🌍 Earth</button>
+                    <button class="btn-category" onclick="setCategory('Space')">🚀 Space</button>
+                    <button class="btn-category" onclick="setCategory('Physics')">⚛️ Physics</button>
+                    <button class="btn-category" onclick="setCategory('Chemistry')">🧪 Chemistry</button>
+                    <button class="btn-category" onclick="setCategory('Energy')">⚡ Energy</button>
                 </div>
 
                 <div class="controls">
@@ -905,7 +993,8 @@
                 createdAt: Date.now(),
                 firstBuzzTime: null,
                 currentQuestion: 1,
-                scores: {}
+                scores: {},
+                categories: {}
             });
 
             document.getElementById('displayGameCode').textContent = code;
@@ -1042,8 +1131,17 @@
             const scores = gameData.scores || {};
             const currentQ = gameData.currentQuestion || 1;
 
+            const categories = gameData.categories || {};
+            const currentCategory = categories[`Q${currentQ}`];
+
             document.getElementById('playerCount').textContent = Object.keys(players).length;
-            document.getElementById('currentQuestion').textContent = currentQ;
+            
+            // Update current question display with category
+            if (currentCategory) {
+                document.getElementById('currentQuestion').textContent = `${currentQ} - ${currentCategory}`;
+            } else {
+                document.getElementById('currentQuestion').textContent = currentQ;
+            }
 
             grid.innerHTML = '';
 
@@ -1277,13 +1375,16 @@
 
             // Update body with scores
             body.innerHTML = '';
+            const categories = gameData.categories || {};
+            
             for (let q = 1; q <= currentQ; q++) {
                 const row = document.createElement('tr');
                 
-                // Question cell
+                // Question cell with category
                 const qCell = document.createElement('td');
                 qCell.className = 'question-cell';
-                qCell.textContent = `Q${q}`;
+                const category = categories[`Q${q}`];
+                qCell.textContent = category ? `Q${q} - ${category}` : `Q${q}`;
                 row.appendChild(qCell);
 
                 // Score cells for each player
@@ -1324,6 +1425,30 @@
             return n + (s[(v - 20) % 10] || s[v] || s[0]);
         }
 
+        // Set category for current question
+        window.setCategory = async function(category) {
+            if (!window.currentGame || !window.isHost) return;
+
+            const gameRef = ref(database, `games/${window.currentGame}`);
+            const snapshot = await get(gameRef);
+            
+            if (!snapshot.exists()) return;
+
+            const gameData = snapshot.val();
+            const currentQ = gameData.currentQuestion || 1;
+
+            const updates = {};
+            updates[`games/${window.currentGame}/categories/Q${currentQ}`] = category;
+
+            await update(ref(database), updates);
+
+            // Visual feedback - highlight selected button
+            document.querySelectorAll('.btn-category').forEach(btn => {
+                btn.classList.remove('selected');
+            });
+            event.target.classList.add('selected');
+        };
+
         // Next question
         window.nextQuestion = async function() {
             if (!window.currentGame || !window.isHost) return;
@@ -1342,6 +1467,11 @@
             updates[`games/${window.currentGame}/firstBuzzTime`] = null;
 
             await update(ref(database), updates);
+
+            // Clear category button selection
+            document.querySelectorAll('.btn-category').forEach(btn => {
+                btn.classList.remove('selected');
+            });
         };
 
 
