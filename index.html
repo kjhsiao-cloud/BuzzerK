@@ -677,27 +677,29 @@
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
         import { getDatabase, ref, set, push, onValue, update, remove, get, onDisconnect } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
 
-    // Import the functions you need from the SDKs you need
-	import { initializeApp } from "firebase/app";
-	// TODO: Add SDKs for Firebase products that you want to use
-	// https://firebase.google.com/docs/web/setup#available-libraries
+        // Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyAT89gU_ue_mh5XFp0EERlUL--PUcICWv8",
+            authDomain: "buzzerk-3bdd9.firebaseapp.com",
+            databaseURL: "https://buzzerk-3bdd9-default-rtdb.firebaseio.com",
+            projectId: "buzzerk-3bdd9",
+            storageBucket: "buzzerk-3bdd9.firebasestorage.app",
+            messagingSenderId: "677604722241",
+            appId: "1:677604722241:web:8f694d4f6357bc0812e8c0"
+        };
 
-	// Your web app's Firebase configuration
-		const firebaseConfig = {
-  			apiKey: "AIzaSyAT89gU_ue_mh5XFp0EERlUL--PUcICWv8",
-  			authDomain: "buzzerk-3bdd9.firebaseapp.com",
-  			databaseURL: "https://buzzerk-3bdd9-default-rtdb.firebaseio.com",
-  			projectId: "buzzerk-3bdd9",
-  			storageBucket: "buzzerk-3bdd9.firebasestorage.app",
-  			messagingSenderId: "677604722241",
-  			appId: "1:677604722241:web:8f694d4f6357bc0812e8c0"
-		};
-
-
-
-        // Initialize Firebase
-        const app = initializeApp(firebaseConfig);
-        const database = getDatabase(app);
+        // Initialize Firebase with error handling
+        console.log("🔥 Initializing Firebase...");
+        let app, database;
+        
+        try {
+            app = initializeApp(firebaseConfig);
+            database = getDatabase(app);
+            console.log("✅ Firebase initialized successfully!");
+        } catch (error) {
+            console.error("❌ Firebase initialization failed:", error);
+            alert("Firebase failed to initialize. Error: " + error.message);
+        }
 
         // Global state
         window.db = database;
@@ -743,30 +745,43 @@
 
         // Create game
         window.createGame = async function() {
+            console.log("🎮 Create Game button clicked!");
+            
             const hostName = document.getElementById('hostName').value.trim();
+            console.log("Host name:", hostName);
+            
             if (!hostName) {
                 alert('Please enter your name');
                 return;
             }
 
             const code = generateGameCode();
+            console.log("Generated game code:", code);
+            
             window.currentGame = code;
             window.isHost = true;
 
-            // Create game in Firebase
-            const gameRef = ref(database, `games/${code}`);
-            await set(gameRef, {
-                host: hostName,
-                createdAt: Date.now(),
-                firstBuzzTime: null
-            });
+            try {
+                console.log("📡 Creating game in Firebase...");
+                // Create game in Firebase
+                const gameRef = ref(database, `games/${code}`);
+                await set(gameRef, {
+                    host: hostName,
+                    createdAt: Date.now(),
+                    firstBuzzTime: null
+                });
+                console.log("✅ Game created successfully!");
 
-            document.getElementById('displayGameCode').textContent = code;
-            hideAllScreens();
-            document.getElementById('hostGameScreen').classList.add('active');
-            
-            // Listen to game updates
-            listenToGame(code);
+                document.getElementById('displayGameCode').textContent = code;
+                hideAllScreens();
+                document.getElementById('hostGameScreen').classList.add('active');
+                
+                // Listen to game updates
+                listenToGame(code);
+            } catch (error) {
+                console.error("❌ Error creating game:", error);
+                alert("Failed to create game: " + error.message);
+            }
         };
 
         // Join game
