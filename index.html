@@ -688,18 +688,9 @@
             appId: "1:677604722241:web:8f694d4f6357bc0812e8c0"
         };
 
-        // Initialize Firebase with error handling
-        console.log("🔥 Initializing Firebase...");
-        let app, database;
-        
-        try {
-            app = initializeApp(firebaseConfig);
-            database = getDatabase(app);
-            console.log("✅ Firebase initialized successfully!");
-        } catch (error) {
-            console.error("❌ Firebase initialization failed:", error);
-            alert("Firebase failed to initialize. Error: " + error.message);
-        }
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const database = getDatabase(app);
 
         // Global state
         window.db = database;
@@ -745,43 +736,30 @@
 
         // Create game
         window.createGame = async function() {
-            console.log("🎮 Create Game button clicked!");
-            
             const hostName = document.getElementById('hostName').value.trim();
-            console.log("Host name:", hostName);
-            
             if (!hostName) {
                 alert('Please enter your name');
                 return;
             }
 
             const code = generateGameCode();
-            console.log("Generated game code:", code);
-            
             window.currentGame = code;
             window.isHost = true;
 
-            try {
-                console.log("📡 Creating game in Firebase...");
-                // Create game in Firebase
-                const gameRef = ref(database, `games/${code}`);
-                await set(gameRef, {
-                    host: hostName,
-                    createdAt: Date.now(),
-                    firstBuzzTime: null
-                });
-                console.log("✅ Game created successfully!");
+            // Create game in Firebase
+            const gameRef = ref(database, `games/${code}`);
+            await set(gameRef, {
+                host: hostName,
+                createdAt: Date.now(),
+                firstBuzzTime: null
+            });
 
-                document.getElementById('displayGameCode').textContent = code;
-                hideAllScreens();
-                document.getElementById('hostGameScreen').classList.add('active');
-                
-                // Listen to game updates
-                listenToGame(code);
-            } catch (error) {
-                console.error("❌ Error creating game:", error);
-                alert("Failed to create game: " + error.message);
-            }
+            document.getElementById('displayGameCode').textContent = code;
+            hideAllScreens();
+            document.getElementById('hostGameScreen').classList.add('active');
+            
+            // Listen to game updates
+            listenToGame(code);
         };
 
         // Join game
