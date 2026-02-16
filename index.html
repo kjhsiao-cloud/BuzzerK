@@ -948,22 +948,62 @@
             window.currentGame = gameCode;
             window.isHost = false;
 
-            // Add player to game
+            // Check if player with this name already exists
             const playersRef = ref(database, `games/${gameCode}/players`);
-            const newPlayerRef = push(playersRef);
-            window.currentPlayer = {
-                id: newPlayerRef.key,
-                name: playerName
-            };
+            const playersSnapshot = await get(playersRef);
+            const existingPlayers = playersSnapshot.val() || {};
+            
+            let playerId = null;
+            let playerData = null;
 
-            await set(newPlayerRef, {
-                name: playerName,
-                joinedAt: Date.now()
+            // Look for existing player with same name
+            for (const [id, data] of Object.entries(existingPlayers)) {
+                if (data.name === playerName) {
+                    playerId = id;
+                    playerData = data;
+                    break;
+                }
+            }
+
+            // If player exists, rejoin with same ID
+            if (playerId) {
+                window.currentPlayer = {
+                    id: playerId,
+                    name: playerName
+                };
+
+                // Update player status to online
+                await update(ref(database, `games/${gameCode}/players/${playerId}`), {
+                    online: true,
+                    lastSeen: Date.now()
+                });
+
+                window.playerRef = ref(database, `games/${gameCode}/players/${playerId}`);
+            } else {
+                // Create new player with push ID
+                const newPlayerRef = push(playersRef);
+                playerId = newPlayerRef.key;
+
+                window.currentPlayer = {
+                    id: playerId,
+                    name: playerName
+                };
+
+                await set(newPlayerRef, {
+                    name: playerName,
+                    joinedAt: Date.now(),
+                    online: true,
+                    lastSeen: Date.now()
+                });
+
+                window.playerRef = newPlayerRef;
+            }
+
+            // Setup disconnect handler - mark as offline instead of removing
+            onDisconnect(window.playerRef).update({
+                online: false,
+                lastSeen: Date.now()
             });
-
-            // Setup disconnect handler
-            window.playerRef = newPlayerRef;
-            onDisconnect(newPlayerRef).remove();
 
             document.getElementById('playerGameCode').textContent = gameCode;
             hideAllScreens();
@@ -1012,9 +1052,21 @@
                 const card = document.createElement('div');
                 card.className = 'player-card';
 
+                // Check if player is online
+                const isOnline = playerData.online !== false;
+                if (!isOnline) {
+                    card.style.opacity = '0.6';
+                }
+
                 let statusText = 'Waiting...';
                 let timeDiffHTML = '';
                 let scoreButtonsHTML = '';
+                let onlineStatusHTML = '';
+
+                // Add online/offline indicator
+                if (!isOnline) {
+                    onlineStatusHTML = '<div style="position: absolute; top: 10px; left: 10px; background: rgba(255, 0, 0, 0.7); color: white; padding: 0.3rem 0.6rem; border-radius: 10px; font-size: 0.7rem; font-weight: 600;">OFFLINE</div>';
+                }
 
                 if (buzz) {
                     const buzzesArray = Object.entries(buzzes)
@@ -1057,6 +1109,7 @@
                 const initials = playerData.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
 
                 card.innerHTML = `
+                    ${onlineStatusHTML}
                     ${timeDiffHTML}
                     <div class="player-avatar">${initials}</div>
                     <div class="player-name">${playerData.name}</div>
@@ -1323,10 +1376,11 @@
             if (!window.currentGame || !window.currentPlayer) return;
 
             if (confirm('Are you sure you want to leave this game?')) {
-                // Remove player
-                await remove(ref(database, `games/${window.currentGame}/players/${window.currentPlayer.id}`));
-                // Remove buzz if exists
-                await remove(ref(database, `games/${window.currentGame}/buzzes/${window.currentPlayer.id}`));
+                // Mark player as offline instead of removing
+                await update(ref(database, `games/${window.currentGame}/players/${window.currentPlayer.id}`), {
+                    online: false,
+                    lastSeen: Date.now()
+                });
                 
                 cleanupListeners();
                 window.currentGame = null;
