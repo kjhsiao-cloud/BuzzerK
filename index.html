@@ -790,6 +790,118 @@
             font-size: 1rem;
         }
 
+        .timer-section {
+            text-align: center;
+            margin: 2rem 0 1rem;
+            padding: 1.5rem;
+            background: rgba(10, 0, 21, 0.5);
+            border: 2px solid rgba(0, 212, 255, 0.2);
+            border-radius: 16px;
+        }
+
+        .timer-display {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 6rem;
+            font-weight: 900;
+            line-height: 1;
+            margin-bottom: 1.2rem;
+            transition: color 0.3s ease;
+            color: var(--electric-blue);
+            text-shadow: 0 0 30px rgba(0, 212, 255, 0.5);
+        }
+
+        .timer-display.running {
+            color: #00ff88;
+            text-shadow: 0 0 30px rgba(0, 255, 136, 0.6);
+            animation: timerPulse 1s ease-in-out infinite;
+        }
+
+        .timer-display.warning {
+            color: var(--gold);
+            text-shadow: 0 0 30px rgba(255, 215, 0, 0.6);
+            animation: timerPulse 0.5s ease-in-out infinite;
+        }
+
+        .timer-display.danger {
+            color: var(--danger-red);
+            text-shadow: 0 0 40px rgba(255, 0, 84, 0.8);
+            animation: timerPulse 0.25s ease-in-out infinite;
+        }
+
+        .timer-display.finished {
+            color: var(--danger-red);
+            text-shadow: 0 0 40px rgba(255, 0, 84, 0.8);
+            animation: flashFinished 0.4s ease-in-out 5;
+        }
+
+        @keyframes timerPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.04); }
+        }
+
+        @keyframes flashFinished {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.2; }
+        }
+
+        .timer-controls {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn-timer {
+            padding: 0.9rem 2rem;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.1rem;
+            font-weight: 700;
+            border-radius: 10px;
+            border: 3px solid;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            letter-spacing: 0.05em;
+        }
+
+        .btn-timer-5 {
+            background: rgba(0, 255, 136, 0.15);
+            border-color: #00ff88;
+            color: #00ff88;
+        }
+
+        .btn-timer-5:hover {
+            background: #00ff88;
+            color: var(--dark-bg);
+            box-shadow: 0 0 20px rgba(0, 255, 136, 0.5);
+            transform: translateY(-2px);
+        }
+
+        .btn-timer-20 {
+            background: rgba(0, 212, 255, 0.15);
+            border-color: var(--electric-blue);
+            color: var(--electric-blue);
+        }
+
+        .btn-timer-20:hover {
+            background: var(--electric-blue);
+            color: var(--dark-bg);
+            box-shadow: 0 0 20px rgba(0, 212, 255, 0.5);
+            transform: translateY(-2px);
+        }
+
+        .btn-timer-reset {
+            background: rgba(255, 0, 84, 0.15);
+            border-color: var(--danger-red);
+            color: var(--danger-red);
+        }
+
+        .btn-timer-reset:hover {
+            background: var(--danger-red);
+            color: white;
+            box-shadow: 0 0 20px rgba(255, 0, 84, 0.5);
+            transform: translateY(-2px);
+        }
+
         .subject-buttons {
             display: flex;
             gap: 0.8rem;
@@ -1024,6 +1136,18 @@
                         <tbody id="subjectBreakdownBody">
                         </tbody>
                     </table>
+                </div>
+
+                <!-- Timer -->
+                <div class="timer-section">
+                    <div class="timer-display" id="timerDisplay">
+                        <span id="timerCount">--</span>
+                    </div>
+                    <div class="timer-controls">
+                        <button class="btn-timer btn-timer-5" onclick="startTimer(5)">⏱ 5s</button>
+                        <button class="btn-timer btn-timer-20" onclick="startTimer(20)">⏱ 20s</button>
+                        <button class="btn-timer btn-timer-reset" onclick="resetTimer()">↺ Reset</button>
+                    </div>
                 </div>
 
                 <div class="controls">
@@ -1822,6 +1946,68 @@
                 body.appendChild(row);
             });
         }
+
+        // ── Timer ──────────────────────────────────────────────
+        let timerInterval = null;
+        let timerRemaining = 0;
+
+        window.startTimer = function(seconds) {
+            // Clear any running timer first
+            clearInterval(timerInterval);
+            timerRemaining = seconds;
+            renderTimer(timerRemaining, 'running');
+
+            timerInterval = setInterval(() => {
+                timerRemaining--;
+
+                if (timerRemaining <= 0) {
+                    clearInterval(timerInterval);
+                    timerInterval = null;
+                    renderTimer(0, 'finished');
+                    // Brief buzz sound via AudioContext
+                    playBeep(880, 0.4);
+                } else if (timerRemaining <= 3) {
+                    renderTimer(timerRemaining, 'danger');
+                    playBeep(660, 0.08);
+                } else if (timerRemaining <= 8) {
+                    renderTimer(timerRemaining, 'warning');
+                } else {
+                    renderTimer(timerRemaining, 'running');
+                }
+            }, 1000);
+        };
+
+        window.resetTimer = function() {
+            clearInterval(timerInterval);
+            timerInterval = null;
+            timerRemaining = 0;
+            renderTimer('--', '');
+        };
+
+        function renderTimer(value, state) {
+            const display = document.getElementById('timerDisplay');
+            const count = document.getElementById('timerCount');
+            if (!display || !count) return;
+            count.textContent = value;
+            display.className = 'timer-display' + (state ? ' ' + state : '');
+        }
+
+        function playBeep(freq, duration) {
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.frequency.value = freq;
+                osc.type = 'sine';
+                gain.gain.setValueAtTime(0.3, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+                osc.start(ctx.currentTime);
+                osc.stop(ctx.currentTime + duration);
+            } catch(e) { /* silently ignore if audio not supported */ }
+        }
+        // ── End Timer ──────────────────────────────────────────
 
         // Next question
         window.nextQuestion = async function() {
