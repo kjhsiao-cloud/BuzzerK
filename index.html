@@ -676,6 +676,91 @@
             font-family: 'Orbitron', sans-serif;
         }
 
+        .points-settings {
+            display: flex;
+            gap: 1.5rem;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin: 1.5rem 0;
+            padding: 1.2rem 1.5rem;
+            background: rgba(255, 0, 110, 0.08);
+            border: 2px solid rgba(255, 0, 110, 0.3);
+            border-radius: 12px;
+        }
+
+        .points-field {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .points-field label {
+            font-size: 0.85rem;
+            color: rgba(255,255,255,0.8);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            text-align: center;
+        }
+
+        .points-field input[type="number"] {
+            width: 100px;
+            padding: 0.7rem;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.3rem;
+            font-weight: 700;
+            text-align: center;
+            background: rgba(10, 0, 21, 0.7);
+            border: 2px solid rgba(255, 0, 110, 0.5);
+            border-radius: 8px;
+            color: white;
+        }
+
+        .points-field input[type="number"]:focus {
+            outline: none;
+            border-color: var(--neon-pink);
+            box-shadow: 0 0 15px rgba(255, 0, 110, 0.3);
+        }
+
+        .category-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.8rem;
+            justify-content: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .score-sheet-points {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.4rem;
+            font-weight: 900;
+            color: var(--gold);
+        }
+
+        .score-sheet-points.positive {
+            color: #00ff88;
+        }
+
+        .score-sheet-points.negative {
+            color: var(--danger-red);
+        }
+
+        .score-sheet-pct {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--electric-blue);
+        }
+
+        .score-sheet-name {
+            font-weight: 700;
+            font-size: 1rem;
+            color: white;
+        }
+
+        .score-sheet-name.offline {
+            opacity: 0.5;
+        }
+
         .subject-buttons {
             display: flex;
             gap: 0.8rem;
@@ -827,18 +912,34 @@
                     Players can join using this code. Press "Reset" to allow new buzzes.
                 </div>
 
-                <div class="question-info">
-                    Question <span id="currentQuestion">1</span><span id="currentSubject"></span>
+                <!-- Points Settings -->
+                <div class="points-settings">
+                    <div class="points-field">
+                        <label for="pointsCorrect">✅ Points for Correct Answer</label>
+                        <input type="number" id="pointsCorrect" value="10" min="0">
+                    </div>
+                    <div class="points-field">
+                        <label for="pointsWrong">❌ Points Deducted for Wrong Answer</label>
+                        <input type="number" id="pointsWrong" value="5" min="0">
+                    </div>
                 </div>
 
-                <div class="subject-buttons">
-                    <button class="subject-btn" onclick="selectSubject('Math')">Math</button>
-                    <button class="subject-btn" onclick="selectSubject('Biology')">Biology</button>
-                    <button class="subject-btn" onclick="selectSubject('Earth')">Earth</button>
-                    <button class="subject-btn" onclick="selectSubject('Space')">Space</button>
-                    <button class="subject-btn" onclick="selectSubject('Physics')">Physics</button>
-                    <button class="subject-btn" onclick="selectSubject('Chemistry')">Chemistry</button>
-                    <button class="subject-btn" onclick="selectSubject('Energy')">Energy</button>
+                <div class="question-info">
+                    Question <span id="currentQuestion">1</span>
+                </div>
+
+                <!-- Category Buttons -->
+                <h3 style="text-align: center; margin: 1.5rem 0 1rem; font-family: 'Orbitron', sans-serif; color: var(--electric-blue); font-size: 1rem;">
+                    SELECT CATEGORY
+                </h3>
+                <div class="category-buttons">
+                    <button class="btn-category" onclick="setCategory('Math', this)">📐 Math</button>
+                    <button class="btn-category" onclick="setCategory('Biology', this)">🧬 Biology</button>
+                    <button class="btn-category" onclick="setCategory('Earth', this)">🌍 Earth</button>
+                    <button class="btn-category" onclick="setCategory('Space', this)">🚀 Space</button>
+                    <button class="btn-category" onclick="setCategory('Physics', this)">⚛️ Physics</button>
+                    <button class="btn-category" onclick="setCategory('Chemistry', this)">🧪 Chemistry</button>
+                    <button class="btn-category" onclick="setCategory('Energy', this)">⚡ Energy</button>
                 </div>
 
                 <h3 style="text-align: center; margin: 2rem 0 1rem; font-family: 'Orbitron', sans-serif; color: var(--electric-blue);">
@@ -846,8 +947,9 @@
                 </h3>
                 <div class="players-grid" id="playersGrid"></div>
 
+                <!-- Toss-up Question Tracker -->
                 <h3 style="text-align: center; margin: 2rem 0 1rem; font-family: 'Orbitron', sans-serif; color: var(--electric-blue);">
-                    SCORE TRACKER
+                    TOSS-UP QUESTION TRACKER
                 </h3>
                 <div class="score-table-container">
                     <table class="score-table" id="scoreTable">
@@ -861,17 +963,22 @@
                     </table>
                 </div>
 
-                <h3 style="text-align: center; margin: 2rem 0 1rem; font-family: 'Orbitron', sans-serif; color: var(--electric-blue);">
-                    SELECT CATEGORY
+                <!-- Score Sheet -->
+                <h3 style="text-align: center; margin: 2rem 0 1rem; font-family: 'Orbitron', sans-serif; color: var(--neon-pink);">
+                    SCORE SHEET
                 </h3>
-                <div style="display: flex; flex-wrap: wrap; gap: 0.8rem; justify-content: center; margin-bottom: 2rem;">
-                    <button class="btn-category" onclick="setCategory('Math')">📐 Math</button>
-                    <button class="btn-category" onclick="setCategory('Biology')">🧬 Biology</button>
-                    <button class="btn-category" onclick="setCategory('Earth')">🌍 Earth</button>
-                    <button class="btn-category" onclick="setCategory('Space')">🚀 Space</button>
-                    <button class="btn-category" onclick="setCategory('Physics')">⚛️ Physics</button>
-                    <button class="btn-category" onclick="setCategory('Chemistry')">🧪 Chemistry</button>
-                    <button class="btn-category" onclick="setCategory('Energy')">⚡ Energy</button>
+                <div class="score-table-container">
+                    <table class="score-table" id="scoreSheetTable">
+                        <thead>
+                            <tr>
+                                <th>Player</th>
+                                <th>Points</th>
+                                <th>Correct %</th>
+                            </tr>
+                        </thead>
+                        <tbody id="scoreSheetBody">
+                        </tbody>
+                    </table>
                 </div>
 
                 <div class="controls">
@@ -994,7 +1101,8 @@
                 firstBuzzTime: null,
                 currentQuestion: 1,
                 scores: {},
-                categories: {}
+                categories: {},
+                playerPoints: {}
             });
 
             document.getElementById('displayGameCode').textContent = code;
@@ -1187,8 +1295,20 @@
                     // Add O/X buttons for buzzed players
                     const currentScore = scores[`Q${currentQ}`]?.[playerId];
                     const isAnswered = currentScore !== undefined;
-                    
+                    const buzzIndex2 = Object.entries(buzzes)
+                        .map(([id, data]) => ({ id, ...data }))
+                        .sort((a, b) => a.time - b.time)
+                        .findIndex(b => b.id === playerId);
+                    const isFirstBuzzer = buzzIndex2 === 0;
+
+                    const ptCorrect = parseInt(document.getElementById('pointsCorrect')?.value) || 10;
+                    const ptWrong = parseInt(document.getElementById('pointsWrong')?.value) || 5;
+                    const pointsHint = isFirstBuzzer
+                        ? `<div style="font-size:0.7rem; color: rgba(255,255,255,0.5); margin-bottom:0.3rem;">✅ +${ptCorrect}pts &nbsp; ❌ -${ptWrong}pts</div>`
+                        : `<div style="font-size:0.7rem; color: rgba(255,255,255,0.3); margin-bottom:0.3rem;">No points (not 1st)</div>`;
+
                     scoreButtonsHTML = `
+                        ${pointsHint}
                         <div class="score-buttons">
                             <button class="score-btn correct-btn" 
                                     onclick="markAnswer('${playerId}', true)"
@@ -1220,6 +1340,8 @@
 
             // Update score table
             updateScoreTable(gameData);
+            // Update score sheet
+            updateScoreSheet(gameData);
         }
 
         // Update player view
@@ -1345,28 +1467,39 @@
                 .sort((a, b) => a.time - b.time);
             
             const buzzIndex = buzzesArray.findIndex(b => b.id === playerId);
-            const buzzOrder = buzzIndex + 1; // 1st, 2nd, 3rd, etc.
+            const buzzOrder = buzzIndex + 1;
+            const isFirst = buzzIndex === 0;
 
             let timeDiff = null;
-            
-            if (buzzIndex === 0) {
-                // First buzzer - calculate lead time over 2nd place
-                if (buzzesArray.length > 1) {
-                    const leadMs = buzzesArray[1].time - buzzesArray[0].time;
-                    timeDiff = (leadMs / 1000).toFixed(3); // Lead in seconds
-                }
-            } else {
-                // Other buzzers - calculate time behind 1st place
+            if (buzzIndex === 0 && buzzesArray.length > 1) {
+                const leadMs = buzzesArray[1].time - buzzesArray[0].time;
+                timeDiff = (leadMs / 1000).toFixed(3);
+            } else if (buzzIndex > 0) {
                 const behindMs = buzzesArray[buzzIndex].time - buzzesArray[0].time;
-                timeDiff = (behindMs / 1000).toFixed(3); // Behind in seconds
+                timeDiff = (behindMs / 1000).toFixed(3);
             }
 
             const updates = {};
             updates[`games/${window.currentGame}/scores/Q${currentQ}/${playerId}`] = {
                 correct: isCorrect,
                 order: buzzOrder,
-                timeDiff: timeDiff
+                timeDiff: timeDiff,
+                pointsAwarded: 0  // default for non-first buzzers
             };
+
+            // Only 1st buzzer earns or loses points
+            if (isFirst) {
+                const pointsCorrect = parseInt(document.getElementById('pointsCorrect').value) || 10;
+                const pointsWrong = parseInt(document.getElementById('pointsWrong').value) || 5;
+                const pointChange = isCorrect ? pointsCorrect : -pointsWrong;
+
+                // Store what points were awarded for this question
+                updates[`games/${window.currentGame}/scores/Q${currentQ}/${playerId}/pointsAwarded`] = pointChange;
+
+                // Update the player's cumulative total points
+                const currentPoints = (gameData.playerPoints || {})[playerId] || 0;
+                updates[`games/${window.currentGame}/playerPoints/${playerId}`] = currentPoints + pointChange;
+            }
 
             await update(ref(database), updates);
         };
@@ -1459,12 +1592,11 @@
         }
 
         // Set category for current question
-        window.setCategory = async function(category) {
+        window.setCategory = async function(category, btn) {
             if (!window.currentGame || !window.isHost) return;
 
             const gameRef = ref(database, `games/${window.currentGame}`);
             const snapshot = await get(gameRef);
-            
             if (!snapshot.exists()) return;
 
             const gameData = snapshot.val();
@@ -1472,15 +1604,75 @@
 
             const updates = {};
             updates[`games/${window.currentGame}/categories/Q${currentQ}`] = category;
-
             await update(ref(database), updates);
 
             // Visual feedback - highlight selected button
-            document.querySelectorAll('.btn-category').forEach(btn => {
-                btn.classList.remove('selected');
-            });
-            event.target.classList.add('selected');
+            document.querySelectorAll('.btn-category').forEach(b => b.classList.remove('selected'));
+            if (btn) btn.classList.add('selected');
         };
+
+        // Update Score Sheet table
+        function updateScoreSheet(gameData) {
+            const players = gameData.players || {};
+            const scores = gameData.scores || {};
+            const playerPoints = gameData.playerPoints || {};
+            const body = document.getElementById('scoreSheetBody');
+
+            if (!body) return;
+            body.innerHTML = '';
+
+            // Calculate stats per player
+            const playerStats = {};
+            Object.entries(players).forEach(([playerId, playerData]) => {
+                playerStats[playerId] = {
+                    name: playerData.name,
+                    online: playerData.online !== false,
+                    points: playerPoints[playerId] || 0,
+                    firstBuzzes: 0,
+                    correct: 0
+                };
+            });
+
+            // Count first buzzes and correct answers (only for 1st buzzer)
+            Object.entries(scores).forEach(([qKey, qScores]) => {
+                if (!qScores) return;
+                Object.entries(qScores).forEach(([playerId, scoreData]) => {
+                    if (!playerStats[playerId]) return;
+                    if (typeof scoreData === 'object' && scoreData.order === 1) {
+                        playerStats[playerId].firstBuzzes++;
+                        if (scoreData.correct) playerStats[playerId].correct++;
+                    }
+                });
+            });
+
+            // Sort by points descending
+            const sorted = Object.entries(playerStats)
+                .sort((a, b) => b[1].points - a[1].points);
+
+            sorted.forEach(([playerId, stat], rank) => {
+                const row = document.createElement('tr');
+                const pct = stat.firstBuzzes > 0
+                    ? ((stat.correct / stat.firstBuzzes) * 100).toFixed(0) + '%'
+                    : '—';
+
+                const pointsClass = stat.points > 0 ? 'positive' : stat.points < 0 ? 'negative' : '';
+                const pointsSign = stat.points > 0 ? '+' : '';
+
+                // Rank medal for top 3
+                const medals = ['🥇', '🥈', '🥉'];
+                const rankDisplay = rank < 3 ? medals[rank] : `#${rank + 1}`;
+
+                row.innerHTML = `
+                    <td>
+                        <span style="margin-right: 0.5rem;">${rankDisplay}</span>
+                        <span class="score-sheet-name ${!stat.online ? 'offline' : ''}">${stat.name}${!stat.online ? ' 📴' : ''}</span>
+                    </td>
+                    <td><span class="score-sheet-points ${pointsClass}">${pointsSign}${stat.points}</span></td>
+                    <td><span class="score-sheet-pct">${pct}</span><br><span style="font-size:0.75rem; opacity:0.6;">${stat.correct}/${stat.firstBuzzes} 1st buzzes</span></td>
+                `;
+                body.appendChild(row);
+            });
+        }
 
         // Next question
         window.nextQuestion = async function() {
