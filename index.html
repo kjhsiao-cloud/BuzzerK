@@ -1339,7 +1339,7 @@
             const currentQ = gameData.currentQuestion || 1;
             const buzzes = gameData.buzzes || {};
 
-            // Find buzz order
+            // Find buzz order and calculate time differences
             const buzzesArray = Object.entries(buzzes)
                 .map(([id, data]) => ({ id, ...data }))
                 .sort((a, b) => a.time - b.time);
@@ -1347,10 +1347,25 @@
             const buzzIndex = buzzesArray.findIndex(b => b.id === playerId);
             const buzzOrder = buzzIndex + 1; // 1st, 2nd, 3rd, etc.
 
+            let timeDiff = null;
+            
+            if (buzzIndex === 0) {
+                // First buzzer - calculate lead time over 2nd place
+                if (buzzesArray.length > 1) {
+                    const leadMs = buzzesArray[1].time - buzzesArray[0].time;
+                    timeDiff = (leadMs / 1000).toFixed(3); // Lead in seconds
+                }
+            } else {
+                // Other buzzers - calculate time behind 1st place
+                const behindMs = buzzesArray[buzzIndex].time - buzzesArray[0].time;
+                timeDiff = (behindMs / 1000).toFixed(3); // Behind in seconds
+            }
+
             const updates = {};
             updates[`games/${window.currentGame}/scores/Q${currentQ}/${playerId}`] = {
                 correct: isCorrect,
-                order: buzzOrder
+                order: buzzOrder,
+                timeDiff: timeDiff
             };
 
             await update(ref(database), updates);
@@ -1394,12 +1409,30 @@
                     const playerScore = questionScores[playerId];
                     
                     if (playerScore !== undefined && playerScore !== null) {
-                        // Handle new format (object with correct and order)
+                        // Handle new format (object with correct, order, and timeDiff)
                         if (typeof playerScore === 'object') {
                             const mark = playerScore.correct ? 'O' : 'X';
                             const markClass = playerScore.correct ? 'correct-mark' : 'incorrect-mark';
                             const order = getOrdinal(playerScore.order);
-                            cell.innerHTML = `<span class="${markClass}">${mark}-${order}</span>`;
+                            
+                            // Build display text
+                            let displayText = `${mark}-${order}`;
+                            
+                            // Add time difference if available
+                            if (playerScore.timeDiff !== null && playerScore.timeDiff !== undefined) {
+                                if (playerScore.order === 1) {
+                                    // 1st place - show lead time over 2nd place
+                                    displayText += `<br><span style="font-size: 0.75rem; opacity: 0.8; color: #00ff88;">Lead: ${playerScore.timeDiff}s</span>`;
+                                } else {
+                                    // Other places - show time behind 1st place
+                                    displayText += `<br><span style="font-size: 0.75rem; opacity: 0.8;">+${playerScore.timeDiff}s</span>`;
+                                }
+                            } else if (playerScore.order === 1) {
+                                // 1st place but no 2nd place yet
+                                displayText += `<br><span style="font-size: 0.75rem; opacity: 0.6;">Only buzzer</span>`;
+                            }
+                            
+                            cell.innerHTML = `<span class="${markClass}">${displayText}</span>`;
                         } 
                         // Handle old format (just boolean) - backward compatibility
                         else {
@@ -1465,6 +1498,7 @@
             updates[`games/${window.currentGame}/currentQuestion`] = nextQ;
             updates[`games/${window.currentGame}/buzzes`] = null;
             updates[`games/${window.currentGame}/firstBuzzTime`] = null;
+            updates[`games/${window.currentGame}/questionStartTime`] = Date.now(); // Track when question starts
 
             await update(ref(database), updates);
 
