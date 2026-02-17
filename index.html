@@ -1782,6 +1782,9 @@
             subjects.forEach(subject => {
                 const row = document.createElement('tr');
 
+                // Count how many questions were asked for this subject
+                const questionCount = Object.values(categories).filter(c => c === subject).length;
+
                 // Subject label cell
                 const subjectIcons = {
                     'Math': '📐', 'Biology': '🧬', 'Earth': '🌍',
@@ -1790,7 +1793,10 @@
                 const icon = subjectIcons[subject] || '📚';
                 const qCell = document.createElement('td');
                 qCell.className = 'question-cell';
-                qCell.innerHTML = `${icon} ${subject}`;
+                qCell.innerHTML = `
+                    <div style="font-weight:700;">${icon} ${subject}</div>
+                    <div style="font-size:0.75rem; color: var(--electric-blue); opacity:0.8; margin-top:0.3rem;">${questionCount} Q asked</div>
+                `;
                 row.appendChild(qCell);
 
                 // One cell per player
