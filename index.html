@@ -1144,6 +1144,22 @@
                     </table>
                 </div>
 
+                <!-- Bonus Question Table -->
+                <h3 style="text-align: center; margin: 2rem 0 0.5rem; font-family: 'Orbitron', sans-serif; color: var(--gold);">
+                    🌟 BONUS QUESTION
+                </h3>
+                <div class="score-table-container" style="margin-top:1rem;">
+                    <table class="score-table" id="bonusTable">
+                        <thead>
+                            <tr id="bonusTableHeader">
+                                <th>Bonus Q</th>
+                            </tr>
+                        </thead>
+                        <tbody id="bonusTableBody">
+                        </tbody>
+                    </table>
+                </div>
+
                 <!-- Score Sheet -->
                 <h3 style="text-align: center; margin: 2rem 0 1rem; font-family: 'Orbitron', sans-serif; color: var(--neon-pink);">
                     SCORE SHEET
@@ -1194,43 +1210,6 @@
                     <button class="btn-secondary" onclick="nextQuestion()">➡️ Next Question</button>
                     <button class="btn-secondary" onclick="resetBuzzers()">🔄 Reset Buzzers</button>
                     <button class="btn-secondary" onclick="endGame()">❌ End Game</button>
-                </div>
-
-                <!-- Bonus Question Table -->
-                <h3 style="text-align: center; margin: 2.5rem 0 0.5rem; font-family: 'Orbitron', sans-serif; color: var(--gold);">
-                    🌟 BONUS QUESTION
-                </h3>
-                <p style="text-align:center; color: rgba(255,255,255,0.5); font-size:0.9rem; margin-bottom: 1.2rem; letter-spacing:0.05em;">
-                    Select a subject and mark each player's answer. Only answered players show O/X.
-                </p>
-
-                <!-- Bonus subject buttons -->
-                <div class="category-buttons" id="bonusCategoryButtons">
-                    <button class="btn-category" onclick="setBonusCategory('Math', this)">📐 Math</button>
-                    <button class="btn-category" onclick="setBonusCategory('Biology', this)">🧬 Biology</button>
-                    <button class="btn-category" onclick="setBonusCategory('Earth', this)">🌍 Earth</button>
-                    <button class="btn-category" onclick="setBonusCategory('Space', this)">🚀 Space</button>
-                    <button class="btn-category" onclick="setBonusCategory('Physics', this)">⚛️ Physics</button>
-                    <button class="btn-category" onclick="setBonusCategory('Chemistry', this)">🧪 Chemistry</button>
-                    <button class="btn-category" onclick="setBonusCategory('Energy', this)">⚡ Energy</button>
-                </div>
-
-                <!-- Bonus tracker table -->
-                <div class="score-table-container" style="margin-top:1rem;">
-                    <table class="score-table" id="bonusTable">
-                        <thead>
-                            <tr id="bonusTableHeader">
-                                <th>Bonus Q</th>
-                            </tr>
-                        </thead>
-                        <tbody id="bonusTableBody">
-                        </tbody>
-                    </table>
-                </div>
-
-                <!-- Bonus next question button (inside the bonus section) -->
-                <div style="display:flex; justify-content:center; margin-top:1.2rem; margin-bottom:2rem;">
-                    <button class="btn-bonus-next" onclick="nextBonusQuestion()">➡️ Next Bonus Question</button>
                 </div>
 
             </div>
@@ -1859,8 +1838,10 @@
             const gameData = snapshot.val();
             const currentQ = gameData.currentQuestion || 1;
 
+            // Assign category to both toss-up and bonus for the same question number
             const updates = {};
             updates[`games/${window.currentGame}/categories/Q${currentQ}`] = category;
+            updates[`games/${window.currentGame}/bonusCategories/BQ${currentQ}`] = category;
             await update(ref(database), updates);
 
             // Visual feedback - highlight selected button
@@ -2093,45 +2074,6 @@
         // ── End Timer ──────────────────────────────────────────
 
         // ── Bonus Question ─────────────────────────────────────
-        window.setBonusCategory = async function(category, btn) {
-            if (!window.currentGame || !window.isHost) return;
-
-            const gameRef = ref(database, `games/${window.currentGame}`);
-            const snapshot = await get(gameRef);
-            if (!snapshot.exists()) return;
-
-            const gameData = snapshot.val();
-            const currentBQ = gameData.currentBonusQuestion || 1;
-
-            await update(ref(database), {
-                [`games/${window.currentGame}/bonusCategories/BQ${currentBQ}`]: category
-            });
-
-            // Visual feedback
-            document.querySelectorAll('#bonusCategoryButtons .btn-category')
-                .forEach(b => b.classList.remove('selected'));
-            if (btn) btn.classList.add('selected');
-        };
-
-        window.nextBonusQuestion = async function() {
-            if (!window.currentGame || !window.isHost) return;
-
-            const gameRef = ref(database, `games/${window.currentGame}`);
-            const snapshot = await get(gameRef);
-            if (!snapshot.exists()) return;
-
-            const gameData = snapshot.val();
-            const nextBQ = (gameData.currentBonusQuestion || 1) + 1;
-
-            await update(ref(database), {
-                [`games/${window.currentGame}/currentBonusQuestion`]: nextBQ
-            });
-
-            // Clear bonus category selection
-            document.querySelectorAll('#bonusCategoryButtons .btn-category')
-                .forEach(b => b.classList.remove('selected'));
-        };
-
         window.markBonus = async function(playerId, isCorrect) {
             if (!window.currentGame || !window.isHost) return;
 
@@ -2140,10 +2082,10 @@
             if (!snapshot.exists()) return;
 
             const gameData = snapshot.val();
-            const currentBQ = gameData.currentBonusQuestion || 1;
+            const currentQ = gameData.currentQuestion || 1; // in sync with toss-up
 
             await update(ref(database), {
-                [`games/${window.currentGame}/bonusScores/BQ${currentBQ}/${playerId}`]: {
+                [`games/${window.currentGame}/bonusScores/BQ${currentQ}/${playerId}`]: {
                     correct: isCorrect,
                     playerName: (gameData.players?.[playerId]?.name) || ''
                 }
@@ -2154,7 +2096,7 @@
             const players = gameData.players || {};
             const bonusScores = gameData.bonusScores || {};
             const bonusCategories = gameData.bonusCategories || {};
-            const currentBQ = gameData.currentBonusQuestion || 1;
+            const currentQ = gameData.currentQuestion || 1; // always in sync with toss-up
 
             const header = document.getElementById('bonusTableHeader');
             const body = document.getElementById('bonusTableBody');
@@ -2170,37 +2112,39 @@
                 header.appendChild(th);
             });
 
-            // Build one row per bonus question (including current)
+            // Build one row per question (same number as toss-up)
             body.innerHTML = '';
-            for (let bq = 1; bq <= currentBQ; bq++) {
+            for (let q = 1; q <= currentQ; q++) {
                 const row = document.createElement('tr');
-                const cat = bonusCategories[`BQ${bq}`];
+                const cat = bonusCategories[`BQ${q}`];
                 const subjectIcons = {
                     'Math':'📐','Biology':'🧬','Earth':'🌍',
                     'Space':'🚀','Physics':'⚛️','Chemistry':'🧪','Energy':'⚡'
                 };
                 const icon = cat ? (subjectIcons[cat] || '📚') : '';
-                const isCurrent = bq === currentBQ;
+                const isCurrent = q === currentQ;
 
                 // Row label cell
                 const labelCell = document.createElement('td');
                 labelCell.className = 'question-cell';
                 labelCell.innerHTML = `
-                    <div style="font-weight:700;">BQ${bq}</div>
-                    ${cat ? `<div style="font-size:0.75rem;margin-top:0.2rem;color:var(--electric-blue);">${icon} ${cat}</div>` : '<div style="font-size:0.7rem;opacity:0.4;">No subject</div>'}
+                    <div style="font-weight:700;">BQ${q}</div>
+                    ${cat
+                        ? `<div style="font-size:0.75rem;margin-top:0.2rem;color:var(--electric-blue);">${icon} ${cat}</div>`
+                        : '<div style="font-size:0.7rem;opacity:0.4;">No subject</div>'
+                    }
                 `;
                 row.appendChild(labelCell);
 
                 // One cell per player
-                playerEntries.forEach(([playerId, pd]) => {
+                playerEntries.forEach(([playerId]) => {
                     const cell = document.createElement('td');
-                    const scored = bonusScores[`BQ${bq}`]?.[playerId];
+                    const scored = bonusScores[`BQ${q}`]?.[playerId];
 
                     if (scored !== undefined) {
                         // Already marked — show result
-                        const mark = scored.correct ? '✅' : '❌';
                         const cls = scored.correct ? 'bonus-mark-correct' : 'bonus-mark-wrong';
-                        cell.innerHTML = `<div class="bonus-ox-cell"><span class="${cls}">${mark}</span></div>`;
+                        cell.innerHTML = `<div class="bonus-ox-cell"><span class="${cls}">${scored.correct ? '✅' : '❌'}</span></div>`;
                     } else if (isCurrent) {
                         // Current question — show O/X buttons
                         cell.innerHTML = `
@@ -2211,7 +2155,6 @@
                                 </div>
                             </div>`;
                     } else {
-                        // Past question, player didn't answer
                         cell.innerHTML = '<div style="opacity:0.25;">—</div>';
                     }
                     row.appendChild(cell);
@@ -2222,13 +2165,12 @@
         }
         // ── End Bonus Question ─────────────────────────────────
 
-        // Next question
+        // Next question — advances both toss-up and bonus simultaneously
         window.nextQuestion = async function() {
             if (!window.currentGame || !window.isHost) return;
 
             const gameRef = ref(database, `games/${window.currentGame}`);
             const snapshot = await get(gameRef);
-            
             if (!snapshot.exists()) return;
 
             const gameData = snapshot.val();
@@ -2236,9 +2178,9 @@
 
             const updates = {};
             updates[`games/${window.currentGame}/currentQuestion`] = nextQ;
+            updates[`games/${window.currentGame}/currentBonusQuestion`] = nextQ; // sync with toss-up
             updates[`games/${window.currentGame}/buzzes`] = null;
             updates[`games/${window.currentGame}/firstBuzzTime`] = null;
-            updates[`games/${window.currentGame}/questionStartTime`] = Date.now(); // Track when question starts
 
             await update(ref(database), updates);
 
