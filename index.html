@@ -1479,26 +1479,29 @@
                 timeDiff = (behindMs / 1000).toFixed(3);
             }
 
-            const updates = {};
-            updates[`games/${window.currentGame}/scores/Q${currentQ}/${playerId}`] = {
-                correct: isCorrect,
-                order: buzzOrder,
-                timeDiff: timeDiff,
-                pointsAwarded: 0  // default for non-first buzzers
-            };
-
-            // Only 1st buzzer earns or loses points
+            // Calculate points for 1st buzzer
+            let pointsAwarded = 0;
             if (isFirst) {
                 const pointsCorrect = parseInt(document.getElementById('pointsCorrect').value) || 10;
                 const pointsWrong = parseInt(document.getElementById('pointsWrong').value) || 5;
-                const pointChange = isCorrect ? pointsCorrect : -pointsWrong;
+                pointsAwarded = isCorrect ? pointsCorrect : -pointsWrong;
+            }
 
-                // Store what points were awarded for this question
-                updates[`games/${window.currentGame}/scores/Q${currentQ}/${playerId}/pointsAwarded`] = pointChange;
+            // Build the complete score object in one go (avoids Firebase conflicting path error)
+            const scoreObject = {
+                correct: isCorrect,
+                order: buzzOrder,
+                timeDiff: timeDiff,
+                pointsAwarded: pointsAwarded
+            };
 
-                // Update the player's cumulative total points
+            const updates = {};
+            updates[`games/${window.currentGame}/scores/Q${currentQ}/${playerId}`] = scoreObject;
+
+            // Update cumulative points only for 1st buzzer
+            if (isFirst) {
                 const currentPoints = (gameData.playerPoints || {})[playerId] || 0;
-                updates[`games/${window.currentGame}/playerPoints/${playerId}`] = currentPoints + pointChange;
+                updates[`games/${window.currentGame}/playerPoints/${playerId}`] = currentPoints + pointsAwarded;
             }
 
             await update(ref(database), updates);
