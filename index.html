@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BuzzRush - Real-time Buzzer Game</title>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         :root {
             --electric-blue: #00d4ff;
@@ -923,6 +924,27 @@
             transform: translateY(-2px);
         }
 
+        .btn-export {
+            padding: 0.8rem 1.5rem;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.9rem;
+            font-weight: 700;
+            background: rgba(0, 255, 136, 0.15);
+            border: 2px solid #00ff88;
+            border-radius: 8px;
+            color: #00ff88;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            letter-spacing: 0.05em;
+        }
+
+        .btn-export:hover {
+            background: #00ff88;
+            color: var(--dark-bg);
+            box-shadow: 0 0 20px rgba(0, 255, 136, 0.5);
+            transform: translateY(-2px);
+        }
+
         .bonus-ox-cell {
             display: flex;
             flex-direction: column;
@@ -1209,6 +1231,7 @@
                 <div class="controls">
                     <button class="btn-secondary" onclick="nextQuestion()">➡️ Next Question</button>
                     <button class="btn-secondary" onclick="resetBuzzers()">🔄 Reset Buzzers</button>
+                    <button class="btn-export" onclick="exportToExcel()">📊 Export</button>
                     <button class="btn-secondary" onclick="endGame()">❌ End Game</button>
                 </div>
 
@@ -2190,6 +2213,173 @@
             });
         };
 
+
+        // Export all 4 tables to Excel
+        window.exportToExcel = async function() {
+            if (!window.currentGame) return;
+
+            const gameRef = ref(database, `games/${window.currentGame}`);
+            const snapshot = await get(gameRef);
+            if (!snapshot.exists()) return;
+            const g = snapshot.val();
+
+            const players = g.players || {};
+            const scores = g.scores || {};
+            const bonusScores = g.bonusScores || {};
+            const categories = g.categories || {};
+            const bonusCategories = g.bonusCategories || {};
+            const playerPoints = g.playerPoints || {};
+            const currentQ = g.currentQuestion || 1;
+
+            const playerEntries = Object.entries(players);
+            const playerNames = playerEntries.map(([, p]) => p.name);
+
+            const wb = XLSX.utils.book_new();
+
+            // ── Helper ──────────────────────────────────────────
+            const subjectIcons = {
+                'Math':'📐','Biology':'🧬','Earth':'🌍',
+                'Space':'🚀','Physics':'⚛️','Chemistry':'🧪','Energy':'⚡'
+            };
+
+            // ── Sheet 1: Toss-Up Question Tracker ───────────────
+            {
+                const rows = [['Question', ...playerNames]];
+                for (let q = 1; q <= currentQ; q++) {
+                    const cat = categories[`Q${q}`];
+                    const label = cat ? `Q${q} - ${cat}` : `Q${q}`;
+                    const row = [label];
+                    playerEntries.forEach(([pid]) => {
+                        const s = scores[`Q${q}`]?.[pid];
+                        if (!s) { row.push(''); return; }
+                        if (typeof s === 'object') {
+                            const mark = s.correct ? 'O' : 'X';
+                            const ord = getOrdinal(s.order);
+                            let cell = `${mark}-${ord}`;
+                            if (s.timeDiff != null) {
+                                cell += s.order === 1 ? ` (Lead:${s.timeDiff}s)` : ` (+${s.timeDiff}s)`;
+                            }
+                            row.push(cell);
+                        } else {
+                            row.push(s ? 'O' : 'X');
+                        }
+                    });
+                    rows.push(row);
+                }
+                const ws = XLSX.utils.aoa_to_sheet(rows);
+                styleSheetHeader(ws, playerNames.length + 1);
+                ws['!cols'] = [{ wch: 22 }, ...playerNames.map(() => ({ wch: 20 }))];
+                XLSX.utils.book_append_sheet(wb, ws, 'Toss-Up Tracker');
+            }
+
+            // ── Sheet 2: Bonus Question ──────────────────────────
+            {
+                const rows = [['Bonus Q', ...playerNames]];
+                for (let q = 1; q <= currentQ; q++) {
+                    const cat = bonusCategories[`BQ${q}`];
+                    const label = cat ? `BQ${q} - ${cat}` : `BQ${q}`;
+                    const row = [label];
+                    playerEntries.forEach(([pid]) => {
+                        const s = bonusScores[`BQ${q}`]?.[pid];
+                        if (!s) { row.push(''); return; }
+                        row.push(s.correct ? 'O' : 'X');
+                    });
+                    rows.push(row);
+                }
+                const ws = XLSX.utils.aoa_to_sheet(rows);
+                styleSheetHeader(ws, playerNames.length + 1);
+                ws['!cols'] = [{ wch: 22 }, ...playerNames.map(() => ({ wch: 16 }))];
+                XLSX.utils.book_append_sheet(wb, ws, 'Bonus Questions');
+            }
+
+            // ── Sheet 3: Score Sheet ─────────────────────────────
+            {
+                const playerStats = {};
+                playerEntries.forEach(([pid, pd]) => {
+                    playerStats[pid] = {
+                        name: pd.name,
+                        online: pd.online !== false,
+                        points: playerPoints[pid] || 0,
+                        firstBuzzes: 0, correct: 0
+                    };
+                });
+                Object.values(scores).forEach(qScores => {
+                    if (!qScores) return;
+                    Object.entries(qScores).forEach(([pid, s]) => {
+                        if (!playerStats[pid] || typeof s !== 'object' || s.order !== 1) return;
+                        playerStats[pid].firstBuzzes++;
+                        if (s.correct) playerStats[pid].correct++;
+                    });
+                });
+                const sorted = Object.values(playerStats).sort((a, b) => b.points - a.points);
+                const rows = [['Rank', 'Player', 'Status', 'Points', 'Correct %', 'Correct / 1st Buzzes']];
+                sorted.forEach((s, i) => {
+                    const pct = s.firstBuzzes > 0 ? ((s.correct / s.firstBuzzes) * 100).toFixed(0) + '%' : '—';
+                    rows.push([i + 1, s.name, s.online ? 'Online' : 'Offline', s.points, pct, `${s.correct}/${s.firstBuzzes}`]);
+                });
+                const ws = XLSX.utils.aoa_to_sheet(rows);
+                styleSheetHeader(ws, 6);
+                ws['!cols'] = [{ wch: 8 }, { wch: 18 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 22 }];
+                XLSX.utils.book_append_sheet(wb, ws, 'Score Sheet');
+            }
+
+            // ── Sheet 4: Subject Breakdown ────────────────────────
+            {
+                const subjectSet = new Set(Object.values(categories).filter(Boolean));
+                const subjects = [...subjectSet].sort();
+                const stats = {};
+                playerEntries.forEach(([pid]) => {
+                    stats[pid] = {};
+                    subjects.forEach(s => { stats[pid][s] = { correct: 0, wrong: 0 }; });
+                });
+                Object.entries(scores).forEach(([qKey, qScores]) => {
+                    if (!qScores) return;
+                    const subject = categories[qKey];
+                    if (!subject) return;
+                    Object.entries(qScores).forEach(([pid, s]) => {
+                        if (!stats[pid]?.[subject] || typeof s !== 'object') return;
+                        s.correct ? stats[pid][subject].correct++ : stats[pid][subject].wrong++;
+                    });
+                });
+
+                const header = ['Subject', 'Questions Asked', ...playerNames.flatMap(n => [`${n} ✅`, `${n} ❌`, `${n} %`])];
+                const rows = [header];
+                subjects.forEach(subject => {
+                    const qCount = Object.values(categories).filter(c => c === subject).length;
+                    const icon = subjectIcons[subject] || '';
+                    const row = [`${icon} ${subject}`, qCount];
+                    playerEntries.forEach(([pid]) => {
+                        const s = stats[pid]?.[subject] || { correct: 0, wrong: 0 };
+                        const total = s.correct + s.wrong;
+                        row.push(s.correct, s.wrong, total > 0 ? ((s.correct / total) * 100).toFixed(0) + '%' : '—');
+                    });
+                    rows.push(row);
+                });
+                const ws = XLSX.utils.aoa_to_sheet(rows);
+                styleSheetHeader(ws, header.length);
+                ws['!cols'] = [{ wch: 18 }, { wch: 16 }, ...playerNames.flatMap(() => [{ wch: 10 }, { wch: 10 }, { wch: 10 }])];
+                XLSX.utils.book_append_sheet(wb, ws, 'Subject Breakdown');
+            }
+
+            // ── Download ─────────────────────────────────────────
+            const timestamp = new Date().toISOString().slice(0, 16).replace('T', '_').replace(':', '-');
+            XLSX.writeFile(wb, `BuzzRush_${window.currentGame}_${timestamp}.xlsx`);
+        };
+
+        // Style the first header row of a worksheet
+        function styleSheetHeader(ws, colCount) {
+            for (let c = 0; c < colCount; c++) {
+                const cell = XLSX.utils.encode_cell({ r: 0, c });
+                if (!ws[cell]) continue;
+                ws[cell].s = {
+                    font: { bold: true, color: { rgb: 'FFFFFF' }, name: 'Arial' },
+                    fill: { fgColor: { rgb: '1A0033' } },
+                    alignment: { horizontal: 'center', vertical: 'center', wrapText: true }
+                };
+            }
+            if (!ws['!rows']) ws['!rows'] = [];
+            ws['!rows'][0] = { hpt: 20 };
+        }
 
         // Reset buzzers
         window.resetBuzzers = async function() {
