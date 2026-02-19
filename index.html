@@ -1150,6 +1150,18 @@
                 </h3>
                 <div class="players-grid" id="playersGrid"></div>
 
+                <!-- Timer -->
+                <div class="timer-section">
+                    <div class="timer-display" id="timerDisplay">
+                        <span id="timerCount">--</span>
+                    </div>
+                    <div class="timer-controls">
+                        <button class="btn-timer btn-timer-5" onclick="startTimer(5)">⏱ 5s</button>
+                        <button class="btn-timer btn-timer-20" onclick="startTimer(20)">⏱ 20s</button>
+                        <button class="btn-timer btn-timer-reset" onclick="resetTimer()">↺ Reset</button>
+                    </div>
+                </div>
+
                 <!-- Toss-up Question Tracker -->
                 <h3 style="text-align: center; margin: 2rem 0 1rem; font-family: 'Orbitron', sans-serif; color: var(--electric-blue);">
                     TOSS-UP QUESTION TRACKER
@@ -1214,18 +1226,6 @@
                         <tbody id="subjectBreakdownBody">
                         </tbody>
                     </table>
-                </div>
-
-                <!-- Timer -->
-                <div class="timer-section">
-                    <div class="timer-display" id="timerDisplay">
-                        <span id="timerCount">--</span>
-                    </div>
-                    <div class="timer-controls">
-                        <button class="btn-timer btn-timer-5" onclick="startTimer(5)">⏱ 5s</button>
-                        <button class="btn-timer btn-timer-20" onclick="startTimer(20)">⏱ 20s</button>
-                        <button class="btn-timer btn-timer-reset" onclick="resetTimer()">↺ Reset</button>
-                    </div>
                 </div>
 
                 <div class="controls">
