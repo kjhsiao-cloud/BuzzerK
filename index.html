@@ -791,6 +791,43 @@
             font-size: 1rem;
         }
 
+        .section-header-row {
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            align-items: center;
+            gap: 1rem;
+            margin: 2rem 0 1rem;
+        }
+
+        .section-header-title {
+            grid-column: 2;
+            text-align: center;
+            font-family: 'Orbitron', sans-serif;
+            margin: 0;
+        }
+
+        .btn-reset-small {
+            grid-column: 3;
+            justify-self: end;
+            padding: 0.4rem 0.9rem;
+            font-family: 'DM Sans', 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            font-weight: 600;
+            background: rgba(255, 0, 84, 0.12);
+            border: 1.5px solid var(--danger-red);
+            border-radius: 20px;
+            color: var(--danger-red);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+        }
+
+        .btn-reset-small:hover {
+            background: var(--danger-red);
+            color: white;
+            box-shadow: 0 0 14px rgba(255, 0, 84, 0.4);
+        }
+
         .timer-section {
             text-align: center;
             margin: 2rem 0 1rem;
@@ -1170,9 +1207,13 @@
                 </div>
 
                 <!-- Toss-up Question Tracker -->
-                <h3 style="text-align: center; margin: 2rem 0 1rem; font-family: 'Orbitron', sans-serif; color: var(--electric-blue);">
-                    TOSS-UP QUESTION TRACKER
-                </h3>
+                <div class="section-header-row">
+                    <span></span>
+                    <h3 class="section-header-title" style="color: var(--electric-blue);">
+                        TOSS-UP QUESTION TRACKER
+                    </h3>
+                    <button class="btn-reset-small" onclick="resetTossUpQuestion()">↺ Reset Q</button>
+                </div>
                 <div class="score-table-container">
                     <table class="score-table" id="scoreTable">
                         <thead>
@@ -1186,9 +1227,13 @@
                 </div>
 
                 <!-- Bonus Question Table -->
-                <h3 style="text-align: center; margin: 2rem 0 0.5rem; font-family: 'Orbitron', sans-serif; color: var(--gold);">
-                    🌟 BONUS QUESTION
-                </h3>
+                <div class="section-header-row" style="margin-bottom: 0.5rem;">
+                    <span></span>
+                    <h3 class="section-header-title" style="color: var(--gold);">
+                        🌟 BONUS QUESTION
+                    </h3>
+                    <button class="btn-reset-small" onclick="resetBonusQuestion()">↺ Reset Q</button>
+                </div>
                 <div class="score-table-container" style="margin-top:1rem;">
                     <table class="score-table" id="bonusTable">
                         <thead>
@@ -1752,6 +1797,42 @@
             await update(ref(database), updates);
         };
 
+        // Clear all O/X marks for the CURRENT toss-up question only,
+        // and reverse any points that were awarded for those marks.
+        window.resetTossUpQuestion = async function() {
+            if (!window.currentGame || !window.isHost) return;
+
+            const gameRef = ref(database, `games/${window.currentGame}`);
+            const snapshot = await get(gameRef);
+            if (!snapshot.exists()) return;
+
+            const gameData = snapshot.val();
+            const currentQ = gameData.currentQuestion || 1;
+            const qScores = (gameData.scores || {})[`Q${currentQ}`] || {};
+
+            if (Object.keys(qScores).length === 0) {
+                alert(`No marks to reset for Question ${currentQ}.`);
+                return;
+            }
+
+            if (!confirm(`Clear all O/X marks for Question ${currentQ}? This will also reverse any points awarded.`)) {
+                return;
+            }
+
+            const updates = {};
+            const playerPoints = gameData.playerPoints || {};
+
+            Object.entries(qScores).forEach(([playerId, scoreObj]) => {
+                const pts = (scoreObj && typeof scoreObj === 'object') ? (scoreObj.pointsAwarded || 0) : 0;
+                const current = playerPoints[playerId] || 0;
+                updates[`games/${window.currentGame}/playerPoints/${playerId}`] = current - pts;
+            });
+
+            updates[`games/${window.currentGame}/scores/Q${currentQ}`] = null;
+
+            await update(ref(database), updates);
+        };
+
         // Update score table
         function updateScoreTable(gameData) {
             const players = gameData.players || {};
@@ -2110,6 +2191,42 @@
 
             const currentPoints = (gameData.playerPoints || {})[playerId] || 0;
             updates[`games/${window.currentGame}/playerPoints/${playerId}`] = currentPoints + pointsAwarded;
+
+            await update(ref(database), updates);
+        };
+
+        // Clear all O/X marks for the CURRENT bonus question only,
+        // and reverse any points that were awarded for those marks.
+        window.resetBonusQuestion = async function() {
+            if (!window.currentGame || !window.isHost) return;
+
+            const gameRef = ref(database, `games/${window.currentGame}`);
+            const snapshot = await get(gameRef);
+            if (!snapshot.exists()) return;
+
+            const gameData = snapshot.val();
+            const currentQ = gameData.currentQuestion || 1; // bonus stays in sync with toss-up
+            const bqScores = (gameData.bonusScores || {})[`BQ${currentQ}`] || {};
+
+            if (Object.keys(bqScores).length === 0) {
+                alert(`No marks to reset for Bonus Question ${currentQ}.`);
+                return;
+            }
+
+            if (!confirm(`Clear all O/X marks for Bonus Question ${currentQ}? This will also reverse any points awarded.`)) {
+                return;
+            }
+
+            const updates = {};
+            const playerPoints = gameData.playerPoints || {};
+
+            Object.entries(bqScores).forEach(([playerId, scoreObj]) => {
+                const pts = (scoreObj && typeof scoreObj === 'object') ? (scoreObj.pointsAwarded || 0) : 0;
+                const current = playerPoints[playerId] || 0;
+                updates[`games/${window.currentGame}/playerPoints/${playerId}`] = current - pts;
+            });
+
+            updates[`games/${window.currentGame}/bonusScores/BQ${currentQ}`] = null;
 
             await update(ref(database), updates);
         };
