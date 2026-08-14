@@ -1150,6 +1150,13 @@
                 </h3>
                 <div class="players-grid" id="playersGrid"></div>
 
+                <div class="controls">
+                    <button class="btn-secondary" onclick="nextQuestion()">➡️ Next Question</button>
+                    <button class="btn-secondary" onclick="resetBuzzers()">🔄 Reset Buzzers</button>
+                    <button class="btn-export" onclick="exportToExcel()">📊 Export</button>
+                    <button class="btn-secondary" onclick="endGame()">❌ End Game</button>
+                </div>
+
                 <!-- Timer -->
                 <div class="timer-section">
                     <div class="timer-display" id="timerDisplay">
@@ -1226,13 +1233,6 @@
                         <tbody id="subjectBreakdownBody">
                         </tbody>
                     </table>
-                </div>
-
-                <div class="controls">
-                    <button class="btn-secondary" onclick="nextQuestion()">➡️ Next Question</button>
-                    <button class="btn-secondary" onclick="resetBuzzers()">🔄 Reset Buzzers</button>
-                    <button class="btn-export" onclick="exportToExcel()">📊 Export</button>
-                    <button class="btn-secondary" onclick="endGame()">❌ End Game</button>
                 </div>
 
             </div>
