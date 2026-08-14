@@ -1547,17 +1547,11 @@
                     // Add O/X buttons for buzzed players
                     const currentScore = scores[`Q${currentQ}`]?.[playerId];
                     const isAnswered = currentScore !== undefined;
-                    const buzzIndex2 = Object.entries(buzzes)
-                        .map(([id, data]) => ({ id, ...data }))
-                        .sort((a, b) => a.time - b.time)
-                        .findIndex(b => b.id === playerId);
-                    const isFirstBuzzer = buzzIndex2 === 0;
 
                     const ptCorrect = parseInt(document.getElementById('pointsCorrect')?.value) || 10;
                     const ptWrong = parseInt(document.getElementById('pointsWrong')?.value) || 5;
-                    const pointsHint = isFirstBuzzer
-                        ? `<div style="font-size:0.7rem; color: rgba(255,255,255,0.5); margin-bottom:0.3rem;">✅ +${ptCorrect}pts &nbsp; ❌ -${ptWrong}pts</div>`
-                        : `<div style="font-size:0.7rem; color: rgba(255,255,255,0.3); margin-bottom:0.3rem;">No points (not 1st)</div>`;
+                    // Every buzzer (1st, 2nd, 3rd...) can now earn or lose points when marked
+                    const pointsHint = `<div style="font-size:0.7rem; color: rgba(255,255,255,0.5); margin-bottom:0.3rem;">✅ +${ptCorrect}pts &nbsp; ❌ -${ptWrong}pts</div>`;
 
                     scoreButtonsHTML = `
                         ${pointsHint}
@@ -1724,7 +1718,6 @@
             
             const buzzIndex = buzzesArray.findIndex(b => b.id === playerId);
             const buzzOrder = buzzIndex + 1;
-            const isFirst = buzzIndex === 0;
 
             let timeDiff = null;
             if (buzzIndex === 0 && buzzesArray.length > 1) {
@@ -1735,13 +1728,11 @@
                 timeDiff = (behindMs / 1000).toFixed(3);
             }
 
-            // Calculate points for 1st buzzer
-            let pointsAwarded = 0;
-            if (isFirst) {
-                const pointsCorrect = parseInt(document.getElementById('pointsCorrect').value) || 10;
-                const pointsWrong = parseInt(document.getElementById('pointsWrong').value) || 5;
-                pointsAwarded = isCorrect ? pointsCorrect : -pointsWrong;
-            }
+            // Every buzzer gets a shot at points now — if the 1st buzzer is wrong,
+            // the 2nd buzzer (and so on) can still earn points by answering correctly.
+            const pointsCorrect = parseInt(document.getElementById('pointsCorrect').value) || 10;
+            const pointsWrong = parseInt(document.getElementById('pointsWrong').value) || 5;
+            const pointsAwarded = isCorrect ? pointsCorrect : -pointsWrong;
 
             // Build the complete score object in one go (avoids Firebase conflicting path error)
             const scoreObject = {
@@ -1754,11 +1745,9 @@
             const updates = {};
             updates[`games/${window.currentGame}/scores/Q${currentQ}/${playerId}`] = scoreObject;
 
-            // Update cumulative points only for 1st buzzer
-            if (isFirst) {
-                const currentPoints = (gameData.playerPoints || {})[playerId] || 0;
-                updates[`games/${window.currentGame}/playerPoints/${playerId}`] = currentPoints + pointsAwarded;
-            }
+            // Update cumulative points for whichever buzzer was just marked
+            const currentPoints = (gameData.playerPoints || {})[playerId] || 0;
+            updates[`games/${window.currentGame}/playerPoints/${playerId}`] = currentPoints + pointsAwarded;
 
             await update(ref(database), updates);
         };
@@ -2107,12 +2096,22 @@
             const gameData = snapshot.val();
             const currentQ = gameData.currentQuestion || 1; // in sync with toss-up
 
-            await update(ref(database), {
-                [`games/${window.currentGame}/bonusScores/BQ${currentQ}/${playerId}`]: {
-                    correct: isCorrect,
-                    playerName: (gameData.players?.[playerId]?.name) || ''
-                }
-            });
+            // Bonus answers earn/lose points too, using the same points settings as toss-up
+            const pointsCorrect = parseInt(document.getElementById('pointsCorrect').value) || 10;
+            const pointsWrong = parseInt(document.getElementById('pointsWrong').value) || 5;
+            const pointsAwarded = isCorrect ? pointsCorrect : -pointsWrong;
+
+            const updates = {};
+            updates[`games/${window.currentGame}/bonusScores/BQ${currentQ}/${playerId}`] = {
+                correct: isCorrect,
+                playerName: (gameData.players?.[playerId]?.name) || '',
+                pointsAwarded: pointsAwarded
+            };
+
+            const currentPoints = (gameData.playerPoints || {})[playerId] || 0;
+            updates[`games/${window.currentGame}/playerPoints/${playerId}`] = currentPoints + pointsAwarded;
+
+            await update(ref(database), updates);
         };
 
         function updateBonusTable(gameData) {
@@ -2165,13 +2164,20 @@
                     const scored = bonusScores[`BQ${q}`]?.[playerId];
 
                     if (scored !== undefined) {
-                        // Already marked — show result
+                        // Already marked — show result + points earned/lost
                         const cls = scored.correct ? 'bonus-mark-correct' : 'bonus-mark-wrong';
-                        cell.innerHTML = `<div class="bonus-ox-cell"><span class="${cls}">${scored.correct ? '✅' : '❌'}</span></div>`;
+                        const pts = scored.pointsAwarded;
+                        const ptsHTML = (pts !== undefined && pts !== null)
+                            ? `<div style="font-size:0.7rem; opacity:0.8;">${pts >= 0 ? '+' : ''}${pts}pts</div>`
+                            : '';
+                        cell.innerHTML = `<div class="bonus-ox-cell"><span class="${cls}">${scored.correct ? '✅' : '❌'}</span>${ptsHTML}</div>`;
                     } else if (isCurrent) {
-                        // Current question — show O/X buttons
+                        // Current question — show points hint + O/X buttons
+                        const ptCorrect = parseInt(document.getElementById('pointsCorrect')?.value) || 10;
+                        const ptWrong = parseInt(document.getElementById('pointsWrong')?.value) || 5;
                         cell.innerHTML = `
                             <div class="bonus-ox-cell">
+                                <div style="font-size:0.65rem; color: rgba(255,255,255,0.5); margin-bottom:0.2rem;">+${ptCorrect}/-${ptWrong}</div>
                                 <div class="score-buttons">
                                     <button class="score-btn correct-btn" onclick="markBonus('${playerId}', true)">O</button>
                                     <button class="score-btn incorrect-btn" onclick="markBonus('${playerId}', false)">X</button>
