@@ -791,6 +791,37 @@
             font-size: 1rem;
         }
 
+        .spectator-badge {
+            display: none;
+            text-align: center;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.85rem;
+            font-weight: 700;
+            letter-spacing: 0.1em;
+            color: var(--gold);
+            background: rgba(255, 215, 0, 0.1);
+            border: 1.5px solid var(--gold);
+            border-radius: 8px;
+            padding: 0.6rem;
+            margin-bottom: 1.5rem;
+        }
+
+        body.spectator-mode .spectator-badge {
+            display: block;
+        }
+
+        /* Host-only controls become inert (but still visible) for spectators */
+        body.spectator-mode .controls button:not(.btn-export),
+        body.spectator-mode .btn-category,
+        body.spectator-mode .score-btn,
+        body.spectator-mode .btn-timer,
+        body.spectator-mode .btn-reset-small,
+        body.spectator-mode .points-field input {
+            pointer-events: none;
+            opacity: 0.45;
+            filter: grayscale(40%);
+        }
+
         .section-header-row {
             display: grid;
             grid-template-columns: 1fr auto 1fr;
@@ -1098,6 +1129,9 @@
                 <button class="mode-btn" onclick="showJoinScreen()">
                     <span>⚡ Join Game</span>
                 </button>
+                <button class="mode-btn" onclick="showSpectateScreen()">
+                    <span>👀 Spectate Game</span>
+                </button>
             </div>
         </div>
 
@@ -1140,9 +1174,36 @@
             </div>
         </div>
 
+        <!-- Spectate Screen -->
+        <div id="spectateScreen" class="screen">
+            <div class="game-card">
+                <h2 style="text-align: center; margin-bottom: 2rem; font-family: 'Orbitron', sans-serif; color: var(--gold);">👀 SPECTATE A GAME</h2>
+                <div class="form-group">
+                    <label for="spectatorName">Your Name</label>
+                    <input type="text" id="spectatorName" placeholder="Enter your name">
+                </div>
+                <div class="form-group">
+                    <label for="spectateGameCode">Game Code</label>
+                    <input type="text" id="spectateGameCode" placeholder="Enter 4-digit code" maxlength="4">
+                </div>
+                <button class="btn-primary" onclick="joinAsSpectator()">
+                    <span>Watch Game</span>
+                </button>
+                <div class="controls">
+                    <button class="btn-secondary" onclick="showModeScreen()">Back</button>
+                </div>
+                <div id="spectateError" class="error" style="display: none;"></div>
+            </div>
+        </div>
+
         <!-- Host Game Screen -->
         <div id="hostGameScreen" class="screen">
             <div class="game-card">
+                <div class="spectator-badge" id="spectatorBadge">
+                    👀 SPECTATOR MODE — Read Only
+                    <button class="btn-secondary" style="margin-left:1rem; padding:0.3rem 0.9rem; font-size:0.75rem; pointer-events:auto; opacity:1;" onclick="leaveSpectate()">Exit</button>
+                </div>
+
                 <div class="game-code-display">
                     <div style="font-size: 1.2rem; color: var(--electric-blue); margin-bottom: 0.5rem; letter-spacing: 0.2em;">GAME CODE</div>
                     <div class="game-code" id="displayGameCode">----</div>
@@ -1338,6 +1399,7 @@
         window.currentGame = null;
         window.currentPlayer = null;
         window.isHost = false;
+        window.isSpectator = false;
         window.gameListener = null;
         window.playerRef = null;
 
@@ -1346,6 +1408,8 @@
             hideAllScreens();
             document.getElementById('modeScreen').classList.add('active');
             cleanupListeners();
+            window.isSpectator = false;
+            document.body.classList.remove('spectator-mode');
         };
 
         window.showHostScreen = function() {
@@ -1356,6 +1420,11 @@
         window.showJoinScreen = function() {
             hideAllScreens();
             document.getElementById('joinScreen').classList.add('active');
+        };
+
+        window.showSpectateScreen = function() {
+            hideAllScreens();
+            document.getElementById('spectateScreen').classList.add('active');
         };
 
         function hideAllScreens() {
@@ -1507,6 +1576,58 @@
             listenToGame(gameCode);
         };
 
+        // Join as spectator — sees the exact same scoring page the host sees,
+        // but read-only (no player record, no buzz capability, no scoring actions).
+        window.joinAsSpectator = async function() {
+            const spectatorName = document.getElementById('spectatorName').value.trim();
+            const gameCode = document.getElementById('spectateGameCode').value.trim();
+            const errorDiv = document.getElementById('spectateError');
+
+            if (!spectatorName) {
+                errorDiv.textContent = 'Please enter your name';
+                errorDiv.style.display = 'block';
+                return;
+            }
+            if (!gameCode) {
+                errorDiv.textContent = 'Please enter a game code';
+                errorDiv.style.display = 'block';
+                return;
+            }
+
+            const gameRef = ref(database, `games/${gameCode}`);
+            const snapshot = await get(gameRef);
+
+            if (!snapshot.exists()) {
+                errorDiv.textContent = 'Game not found';
+                errorDiv.style.display = 'block';
+                return;
+            }
+
+            errorDiv.style.display = 'none';
+
+            window.currentGame = gameCode;
+            window.isHost = false;
+            window.isSpectator = true;
+            window.spectatorName = spectatorName;
+
+            document.body.classList.add('spectator-mode');
+            document.getElementById('displayGameCode').textContent = gameCode;
+            hideAllScreens();
+            document.getElementById('hostGameScreen').classList.add('active');
+
+            // Listen to game updates — dispatches to the same host view renderer
+            listenToGame(gameCode);
+        };
+
+        // Exit spectator mode and return to the landing screen
+        window.leaveSpectate = function() {
+            cleanupListeners();
+            window.currentGame = null;
+            window.isSpectator = false;
+            document.body.classList.remove('spectator-mode');
+            showModeScreen();
+        };
+
         // Listen to game updates
         function listenToGame(gameCode) {
             const gameRef = ref(database, `games/${gameCode}`);
@@ -1514,13 +1635,16 @@
             window.gameListener = onValue(gameRef, (snapshot) => {
                 if (!snapshot.exists()) {
                     alert('Game has ended');
+                    window.isSpectator = false;
+                    document.body.classList.remove('spectator-mode');
                     showModeScreen();
                     return;
                 }
 
                 const gameData = snapshot.val();
                 
-                if (window.isHost) {
+                if (window.isHost || window.isSpectator) {
+                    // Spectators see the exact same scoring page as the host
                     updateHostView(gameData);
                 } else {
                     updatePlayerView(gameData);
@@ -2518,7 +2642,7 @@
 
         // End game
         window.endGame = async function() {
-            if (!window.currentGame) return;
+            if (!window.currentGame || !window.isHost) return;
 
             if (confirm('Are you sure you want to end this game?')) {
                 await remove(ref(database, `games/${window.currentGame}`));
