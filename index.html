@@ -610,6 +610,22 @@
             transform: scale(1.1);
         }
 
+        .score-btn.interrupt-btn {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            font-size: 1.3rem;
+            background: rgba(255, 165, 0, 0.2);
+            border-color: orange;
+            color: orange;
+        }
+
+        .score-btn.interrupt-btn:hover {
+            background: orange;
+            color: var(--dark-bg);
+            transform: scale(1.1);
+        }
+
         .score-btn:disabled {
             opacity: 0.5;
             cursor: not-allowed;
@@ -665,6 +681,13 @@
         .score-table .incorrect-mark {
             color: var(--danger-red);
             font-size: 1.5rem;
+            font-weight: 900;
+            display: inline-block;
+        }
+
+        .score-table .interrupt-mark {
+            color: orange;
+            font-size: 1.3rem;
             font-weight: 900;
             display: inline-block;
         }
@@ -789,6 +812,56 @@
         .subject-cell .empty {
             color: rgba(255,255,255,0.25);
             font-size: 1rem;
+        }
+
+        .spectators-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.6rem;
+            justify-content: center;
+            padding: 1rem;
+            min-height: 3rem;
+            align-items: center;
+        }
+
+        .spectator-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.5rem 1rem;
+            background: rgba(184, 146, 255, 0.1);
+            border: 1.5px solid #b892ff;
+            border-radius: 20px;
+            font-family: 'DM Sans', 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            color: #b892ff;
+        }
+
+        .spectator-pill.offline {
+            opacity: 0.4;
+            border-color: rgba(255,255,255,0.2);
+            color: rgba(255,255,255,0.5);
+        }
+
+        .spectator-pill .dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: #00ff88;
+            box-shadow: 0 0 6px rgba(0, 255, 136, 0.6);
+        }
+
+        .spectator-pill.offline .dot {
+            background: rgba(255,255,255,0.3);
+            box-shadow: none;
+        }
+
+        .spectators-empty {
+            color: rgba(255,255,255,0.35);
+            font-size: 0.85rem;
+            font-family: 'DM Mono', 'JetBrains Mono', monospace;
+            text-align: center;
+            width: 100%;
         }
 
         .spectator-badge {
@@ -1223,6 +1296,10 @@
                         <label for="pointsWrong">❌ Points Deducted for Wrong Answer</label>
                         <input type="number" id="pointsWrong" value="5" min="0">
                     </div>
+                    <div class="points-field">
+                        <label for="pointsInterrupt">⚠️ Points Deducted for Interrupt + Wrong</label>
+                        <input type="number" id="pointsInterrupt" value="10" min="0">
+                    </div>
                 </div>
 
                 <div class="question-info">
@@ -1339,6 +1416,14 @@
                         <tbody id="subjectBreakdownBody">
                         </tbody>
                     </table>
+                </div>
+
+                <!-- Spectators -->
+                <h3 style="text-align: center; margin: 2rem 0 1rem; font-family: 'Orbitron', sans-serif; color: var(--muted-purple, #b892ff);">
+                    👀 SPECTATORS (<span id="spectatorCount">0</span>)
+                </h3>
+                <div class="spectators-list" id="spectatorsList">
+                    <div class="spectators-empty" id="spectatorsEmpty">No spectators watching yet</div>
                 </div>
 
             </div>
@@ -1468,7 +1553,8 @@
                 playerPoints: {},
                 currentBonusQuestion: 1,
                 bonusScores: {},
-                bonusCategories: {}
+                bonusCategories: {},
+                spectators: {}
             });
 
             document.getElementById('displayGameCode').textContent = code;
@@ -1610,6 +1696,23 @@
             window.isSpectator = true;
             window.spectatorName = spectatorName;
 
+            // Register this spectator in Firebase so the host/others can see them
+            const spectatorsRef = ref(database, `games/${gameCode}/spectators`);
+            const newSpectatorRef = push(spectatorsRef);
+            window.currentSpectatorRef = newSpectatorRef;
+
+            await set(newSpectatorRef, {
+                name: spectatorName,
+                online: true,
+                joinedAt: Date.now()
+            });
+
+            // Mark offline (not removed) if they close the tab/lose connection
+            onDisconnect(newSpectatorRef).update({
+                online: false,
+                lastSeen: Date.now()
+            });
+
             document.body.classList.add('spectator-mode');
             document.getElementById('displayGameCode').textContent = gameCode;
             hideAllScreens();
@@ -1620,10 +1723,17 @@
         };
 
         // Exit spectator mode and return to the landing screen
-        window.leaveSpectate = function() {
+        window.leaveSpectate = async function() {
+            if (window.currentGame && window.currentSpectatorRef) {
+                await update(window.currentSpectatorRef, {
+                    online: false,
+                    lastSeen: Date.now()
+                });
+            }
             cleanupListeners();
             window.currentGame = null;
             window.isSpectator = false;
+            window.currentSpectatorRef = null;
             document.body.classList.remove('spectator-mode');
             showModeScreen();
         };
@@ -1719,8 +1829,9 @@
 
                     const ptCorrect = parseInt(document.getElementById('pointsCorrect')?.value) || 10;
                     const ptWrong = parseInt(document.getElementById('pointsWrong')?.value) || 5;
+                    const ptInterrupt = parseInt(document.getElementById('pointsInterrupt')?.value) || 10;
                     // Every buzzer (1st, 2nd, 3rd...) can now earn or lose points when marked
-                    const pointsHint = `<div style="font-size:0.7rem; color: rgba(255,255,255,0.5); margin-bottom:0.3rem;">✅ +${ptCorrect}pts &nbsp; ❌ -${ptWrong}pts</div>`;
+                    const pointsHint = `<div style="font-size:0.7rem; color: rgba(255,255,255,0.5); margin-bottom:0.3rem;">✅ +${ptCorrect}pts &nbsp; ❌ -${ptWrong}pts &nbsp; ⚠️ -${ptInterrupt}pts</div>`;
 
                     scoreButtonsHTML = `
                         ${pointsHint}
@@ -1734,6 +1845,12 @@
                                     onclick="markAnswer('${playerId}', false)"
                                     ${isAnswered ? 'disabled' : ''}>
                                 X
+                            </button>
+                            <button class="score-btn interrupt-btn" 
+                                    onclick="markInterrupt('${playerId}')"
+                                    ${isAnswered ? 'disabled' : ''}
+                                    title="Interrupted the question and answered wrong">
+                                ⚠️
                             </button>
                         </div>
                     `;
@@ -1761,6 +1878,8 @@
             updateSubjectBreakdown(gameData);
             // Update bonus table
             updateBonusTable(gameData);
+            // Update spectators list
+            updateSpectatorsList(gameData);
         }
 
         // Update player view
@@ -1921,6 +2040,57 @@
             await update(ref(database), updates);
         };
 
+        // Mark a player as having interrupted the question and answered wrong —
+        // always counts as incorrect, deducted at the separate "interrupt" point value.
+        window.markInterrupt = async function(playerId) {
+            if (!window.currentGame || !window.isHost) return;
+
+            const gameRef = ref(database, `games/${window.currentGame}`);
+            const snapshot = await get(gameRef);
+
+            if (!snapshot.exists()) return;
+
+            const gameData = snapshot.val();
+            const currentQ = gameData.currentQuestion || 1;
+            const buzzes = gameData.buzzes || {};
+
+            // Find buzz order and calculate time differences (same as markAnswer)
+            const buzzesArray = Object.entries(buzzes)
+                .map(([id, data]) => ({ id, ...data }))
+                .sort((a, b) => a.time - b.time);
+
+            const buzzIndex = buzzesArray.findIndex(b => b.id === playerId);
+            const buzzOrder = buzzIndex + 1;
+
+            let timeDiff = null;
+            if (buzzIndex === 0 && buzzesArray.length > 1) {
+                const leadMs = buzzesArray[1].time - buzzesArray[0].time;
+                timeDiff = (leadMs / 1000).toFixed(3);
+            } else if (buzzIndex > 0) {
+                const behindMs = buzzesArray[buzzIndex].time - buzzesArray[0].time;
+                timeDiff = (behindMs / 1000).toFixed(3);
+            }
+
+            const pointsInterrupt = parseInt(document.getElementById('pointsInterrupt').value) || 10;
+            const pointsAwarded = -pointsInterrupt;
+
+            const scoreObject = {
+                correct: false,
+                interrupted: true,
+                order: buzzOrder,
+                timeDiff: timeDiff,
+                pointsAwarded: pointsAwarded
+            };
+
+            const updates = {};
+            updates[`games/${window.currentGame}/scores/Q${currentQ}/${playerId}`] = scoreObject;
+
+            const currentPoints = (gameData.playerPoints || {})[playerId] || 0;
+            updates[`games/${window.currentGame}/playerPoints/${playerId}`] = currentPoints + pointsAwarded;
+
+            await update(ref(database), updates);
+        };
+
         // Clear all O/X marks for the CURRENT toss-up question only,
         // and reverse any points that were awarded for those marks.
         window.resetTossUpQuestion = async function() {
@@ -1997,15 +2167,18 @@
                     if (playerScore !== undefined && playerScore !== null) {
                         // Handle new format (object with correct, order, and timeDiff)
                         if (typeof playerScore === 'object') {
-                            const mark = playerScore.correct ? 'O' : 'X';
-                            const markClass = playerScore.correct ? 'correct-mark' : 'incorrect-mark';
+                            const isInterrupt = playerScore.interrupted === true;
+                            const mark = isInterrupt ? '⚠️' : (playerScore.correct ? 'O' : 'X');
+                            const markClass = isInterrupt ? 'interrupt-mark' : (playerScore.correct ? 'correct-mark' : 'incorrect-mark');
                             const order = getOrdinal(playerScore.order);
                             
                             // Build display text
                             let displayText = `${mark}-${order}`;
-                            
-                            // Add time difference if available
-                            if (playerScore.timeDiff !== null && playerScore.timeDiff !== undefined) {
+
+                            if (isInterrupt) {
+                                displayText += `<br><span style="font-size: 0.7rem; opacity: 0.8; color: orange;">Interrupt</span>`;
+                            } else if (playerScore.timeDiff !== null && playerScore.timeDiff !== undefined) {
+                                // Add time difference if available
                                 if (playerScore.order === 1) {
                                     // 1st place - show lead time over 2nd place
                                     displayText += `<br><span style="font-size: 0.75rem; opacity: 0.8; color: #00ff88;">Lead: ${playerScore.timeDiff}s</span>`;
@@ -2432,6 +2605,40 @@
 
                 body.appendChild(row);
             }
+        }
+
+        // Update spectators list at the bottom of the scoring page
+        function updateSpectatorsList(gameData) {
+            const spectators = gameData.spectators || {};
+            const container = document.getElementById('spectatorsList');
+            const countEl = document.getElementById('spectatorCount');
+            if (!container || !countEl) return;
+
+            const entries = Object.values(spectators);
+            const onlineCount = entries.filter(s => s.online !== false).length;
+            countEl.textContent = onlineCount;
+
+            if (entries.length === 0) {
+                container.innerHTML = '<div class="spectators-empty" id="spectatorsEmpty">No spectators watching yet</div>';
+                return;
+            }
+
+            // Online spectators first, then offline; alphabetical within each group
+            const sorted = entries.slice().sort((a, b) => {
+                const aOnline = a.online !== false;
+                const bOnline = b.online !== false;
+                if (aOnline !== bOnline) return aOnline ? -1 : 1;
+                return (a.name || '').localeCompare(b.name || '');
+            });
+
+            container.innerHTML = sorted.map(s => {
+                const isOnline = s.online !== false;
+                return `
+                    <div class="spectator-pill ${isOnline ? '' : 'offline'}">
+                        <span class="dot"></span>
+                        <span>${s.name || 'Anonymous'}</span>
+                    </div>`;
+            }).join('');
         }
         // ── End Bonus Question ─────────────────────────────────
 
