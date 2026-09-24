@@ -1290,15 +1290,15 @@
                 <div class="points-settings">
                     <div class="points-field">
                         <label for="pointsCorrect">✅ Points for Correct Answer</label>
-                        <input type="number" id="pointsCorrect" value="10" min="0">
+                        <input type="number" id="pointsCorrect" value="10" min="0" oninput="updatePointsSetting('correct', this.value)">
                     </div>
                     <div class="points-field">
                         <label for="pointsWrong">❌ Points Deducted for Wrong Answer</label>
-                        <input type="number" id="pointsWrong" value="5" min="0">
+                        <input type="number" id="pointsWrong" value="5" min="0" oninput="updatePointsSetting('wrong', this.value)">
                     </div>
                     <div class="points-field">
                         <label for="pointsInterrupt">⚠️ Points Deducted for Interrupt + Wrong</label>
-                        <input type="number" id="pointsInterrupt" value="10" min="0">
+                        <input type="number" id="pointsInterrupt" value="10" min="0" oninput="updatePointsSetting('interrupt', this.value)">
                     </div>
                 </div>
 
@@ -1530,6 +1530,23 @@
         }
 
         // Create game
+        // Persist points settings to Firebase (debounced) so they survive page
+        // reloads/reconnects and stay in sync across host tabs and spectators —
+        // fixes deductions silently falling back to the hardcoded default.
+        let pointsSettingsSaveTimeout = null;
+        window.updatePointsSetting = function(field, value) {
+            if (!window.currentGame || !window.isHost) return;
+            const num = parseInt(value);
+            if (isNaN(num)) return;
+
+            clearTimeout(pointsSettingsSaveTimeout);
+            pointsSettingsSaveTimeout = setTimeout(() => {
+                update(ref(database), {
+                    [`games/${window.currentGame}/pointsSettings/${field}`]: num
+                });
+            }, 300);
+        };
+
         window.createGame = async function() {
             const hostName = document.getElementById('hostName').value.trim();
             if (!hostName) {
@@ -1554,7 +1571,8 @@
                 currentBonusQuestion: 1,
                 bonusScores: {},
                 bonusCategories: {},
-                spectators: {}
+                spectators: {},
+                pointsSettings: { correct: 10, wrong: 5, interrupt: 10 }
             });
 
             document.getElementById('displayGameCode').textContent = code;
@@ -1774,6 +1792,16 @@
             const currentCategory = categories[`Q${currentQ}`];
 
             document.getElementById('playerCount').textContent = Object.keys(players).length;
+
+            // Sync points settings fields from Firebase (skip any field the host
+            // is actively typing in, so we don't clobber their in-progress edit)
+            const pointsSettings = gameData.pointsSettings || {};
+            [['pointsCorrect', 'correct'], ['pointsWrong', 'wrong'], ['pointsInterrupt', 'interrupt']].forEach(([elId, key]) => {
+                const el = document.getElementById(elId);
+                if (el && pointsSettings[key] !== undefined && document.activeElement !== el) {
+                    el.value = pointsSettings[key];
+                }
+            });
             
             // Update current question display with category
             if (currentCategory) {
@@ -1827,9 +1855,10 @@
                     const currentScore = scores[`Q${currentQ}`]?.[playerId];
                     const isAnswered = currentScore !== undefined;
 
-                    const ptCorrect = parseInt(document.getElementById('pointsCorrect')?.value) || 10;
-                    const ptWrong = parseInt(document.getElementById('pointsWrong')?.value) || 5;
-                    const ptInterrupt = parseInt(document.getElementById('pointsInterrupt')?.value) || 10;
+                    const psHint = gameData.pointsSettings || {};
+                    const ptCorrect = psHint.correct ?? (parseInt(document.getElementById('pointsCorrect')?.value) || 10);
+                    const ptWrong = psHint.wrong ?? (parseInt(document.getElementById('pointsWrong')?.value) || 5);
+                    const ptInterrupt = psHint.interrupt ?? (parseInt(document.getElementById('pointsInterrupt')?.value) || 10);
                     // Every buzzer (1st, 2nd, 3rd...) can now earn or lose points when marked
                     const pointsHint = `<div style="font-size:0.7rem; color: rgba(255,255,255,0.5); margin-bottom:0.3rem;">✅ +${ptCorrect}pts &nbsp; ❌ -${ptWrong}pts &nbsp; ⚠️ -${ptInterrupt}pts</div>`;
 
@@ -2018,8 +2047,11 @@
 
             // Every buzzer gets a shot at points now — if the 1st buzzer is wrong,
             // the 2nd buzzer (and so on) can still earn points by answering correctly.
-            const pointsCorrect = parseInt(document.getElementById('pointsCorrect').value) || 10;
-            const pointsWrong = parseInt(document.getElementById('pointsWrong').value) || 5;
+            // Read the authoritative value saved in Firebase first (survives reloads/
+            // multiple tabs); fall back to the on-screen field only for older games.
+            const ps1 = gameData.pointsSettings || {};
+            const pointsCorrect = ps1.correct ?? (parseInt(document.getElementById('pointsCorrect').value) || 10);
+            const pointsWrong = ps1.wrong ?? (parseInt(document.getElementById('pointsWrong').value) || 5);
             const pointsAwarded = isCorrect ? pointsCorrect : -pointsWrong;
 
             // Build the complete score object in one go (avoids Firebase conflicting path error)
@@ -2071,7 +2103,8 @@
                 timeDiff = (behindMs / 1000).toFixed(3);
             }
 
-            const pointsInterrupt = parseInt(document.getElementById('pointsInterrupt').value) || 10;
+            const ps2 = gameData.pointsSettings || {};
+            const pointsInterrupt = ps2.interrupt ?? (parseInt(document.getElementById('pointsInterrupt').value) || 10);
             const pointsAwarded = -pointsInterrupt;
 
             const scoreObject = {
@@ -2475,8 +2508,9 @@
             const currentQ = gameData.currentQuestion || 1; // in sync with toss-up
 
             // Bonus answers earn/lose points too, using the same points settings as toss-up
-            const pointsCorrect = parseInt(document.getElementById('pointsCorrect').value) || 10;
-            const pointsWrong = parseInt(document.getElementById('pointsWrong').value) || 5;
+            const ps3 = gameData.pointsSettings || {};
+            const pointsCorrect = ps3.correct ?? (parseInt(document.getElementById('pointsCorrect').value) || 10);
+            const pointsWrong = ps3.wrong ?? (parseInt(document.getElementById('pointsWrong').value) || 5);
             const pointsAwarded = isCorrect ? pointsCorrect : -pointsWrong;
 
             const updates = {};
@@ -2587,8 +2621,9 @@
                         cell.innerHTML = `<div class="bonus-ox-cell"><span class="${cls}">${scored.correct ? '✅' : '❌'}</span>${ptsHTML}</div>`;
                     } else if (isCurrent) {
                         // Current question — show points hint + O/X buttons
-                        const ptCorrect = parseInt(document.getElementById('pointsCorrect')?.value) || 10;
-                        const ptWrong = parseInt(document.getElementById('pointsWrong')?.value) || 5;
+                        const psBonusHint = gameData.pointsSettings || {};
+                        const ptCorrect = psBonusHint.correct ?? (parseInt(document.getElementById('pointsCorrect')?.value) || 10);
+                        const ptWrong = psBonusHint.wrong ?? (parseInt(document.getElementById('pointsWrong')?.value) || 5);
                         cell.innerHTML = `
                             <div class="bonus-ox-cell">
                                 <div style="font-size:0.65rem; color: rgba(255,255,255,0.5); margin-bottom:0.2rem;">+${ptCorrect}/-${ptWrong}</div>
