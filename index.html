@@ -1312,11 +1312,10 @@
                 </h3>
                 <div class="category-buttons">
                     <button class="btn-category" onclick="setCategory('Math', this)">📐 Math</button>
-                    <button class="btn-category" onclick="setCategory('Biology', this)">🧬 Biology</button>
-                    <button class="btn-category" onclick="setCategory('Earth', this)">🌍 Earth</button>
-                    <button class="btn-category" onclick="setCategory('Space', this)">🚀 Space</button>
-                    <button class="btn-category" onclick="setCategory('Physics', this)">⚛️ Physics</button>
-                    <button class="btn-category" onclick="setCategory('Chemistry', this)">🧪 Chemistry</button>
+                    <button class="btn-category" onclick="setCategory('Life Science', this)">🧬 Life Science</button>
+                    <button class="btn-category" onclick="setCategory('Earth Science', this)">🌍 Earth Science</button>
+                    <button class="btn-category" onclick="setCategory('Physical Science', this)">⚛️ Physical Science</button>
+                    <button class="btn-category" onclick="setCategory('General Science', this)">🔬 General Science</button>
                     <button class="btn-category" onclick="setCategory('Energy', this)">⚡ Energy</button>
                 </div>
 
@@ -2398,8 +2397,8 @@
 
                 // Subject label cell
                 const subjectIcons = {
-                    'Math': '📐', 'Biology': '🧬', 'Earth': '🌍',
-                    'Space': '🚀', 'Physics': '⚛️', 'Chemistry': '🧪', 'Energy': '⚡'
+                    'Math': '📐', 'Life Science': '🧬', 'Earth Science': '🌍',
+                    'Physical Science': '⚛️', 'General Science': '🔬', 'Energy': '⚡'
                 };
                 const icon = subjectIcons[subject] || '📚';
                 const qCell = document.createElement('td');
@@ -2588,8 +2587,8 @@
                 const row = document.createElement('tr');
                 const cat = bonusCategories[`BQ${q}`];
                 const subjectIcons = {
-                    'Math':'📐','Biology':'🧬','Earth':'🌍',
-                    'Space':'🚀','Physics':'⚛️','Chemistry':'🧪','Energy':'⚡'
+                    'Math':'📐','Life Science':'🧬','Earth Science':'🌍',
+                    'Physical Science':'⚛️','General Science':'🔬','Energy':'⚡'
                 };
                 const icon = cat ? (subjectIcons[cat] || '📚') : '';
                 const isCurrent = q === currentQ;
@@ -2727,8 +2726,8 @@
 
             // ── Helper ──────────────────────────────────────────
             const subjectIcons = {
-                'Math':'📐','Biology':'🧬','Earth':'🌍',
-                'Space':'🚀','Physics':'⚛️','Chemistry':'🧪','Energy':'⚡'
+                'Math':'📐','Life Science':'🧬','Earth Science':'🌍',
+                'Physical Science':'⚛️','General Science':'🔬','Energy':'⚡'
             };
 
             // ── Sheet 1: Toss-Up Question Tracker ───────────────
