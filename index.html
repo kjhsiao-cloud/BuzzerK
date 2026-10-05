@@ -1393,6 +1393,8 @@
                             <tr>
                                 <th>Player</th>
                                 <th>Points</th>
+                                <th>Toss-Up Pts</th>
+                                <th>Bonus Pts</th>
                                 <th>Correct %</th>
                             </tr>
                         </thead>
@@ -2275,6 +2277,7 @@
         function updateScoreSheet(gameData) {
             const players = gameData.players || {};
             const scores = gameData.scores || {};
+            const bonusScores = gameData.bonusScores || {};
             const playerPoints = gameData.playerPoints || {};
             const body = document.getElementById('scoreSheetBody');
 
@@ -2288,20 +2291,37 @@
                     name: playerData.name,
                     online: playerData.online !== false,
                     points: playerPoints[playerId] || 0,
+                    tossUpPoints: 0,
+                    bonusPoints: 0,
                     firstBuzzes: 0,
                     correct: 0
                 };
             });
 
-            // Count first buzzes and correct answers (only for 1st buzzer)
+            // Sum toss-up points earned/lost (every buzzer who was marked, not just 1st)
+            // and count first buzzes/correct answers (only for 1st buzzer) for the % stat
             Object.entries(scores).forEach(([qKey, qScores]) => {
                 if (!qScores) return;
                 Object.entries(qScores).forEach(([playerId, scoreData]) => {
                     if (!playerStats[playerId]) return;
-                    if (typeof scoreData === 'object' && scoreData.order === 1) {
+                    if (typeof scoreData !== 'object') return;
+
+                    playerStats[playerId].tossUpPoints += scoreData.pointsAwarded || 0;
+
+                    if (scoreData.order === 1) {
                         playerStats[playerId].firstBuzzes++;
                         if (scoreData.correct) playerStats[playerId].correct++;
                     }
+                });
+            });
+
+            // Sum bonus points earned/lost
+            Object.entries(bonusScores).forEach(([bqKey, bqScores]) => {
+                if (!bqScores) return;
+                Object.entries(bqScores).forEach(([playerId, scoreData]) => {
+                    if (!playerStats[playerId]) return;
+                    if (typeof scoreData !== 'object') return;
+                    playerStats[playerId].bonusPoints += scoreData.pointsAwarded || 0;
                 });
             });
 
@@ -2318,6 +2338,12 @@
                 const pointsClass = stat.points > 0 ? 'positive' : stat.points < 0 ? 'negative' : '';
                 const pointsSign = stat.points > 0 ? '+' : '';
 
+                const tossUpClass = stat.tossUpPoints > 0 ? 'positive' : stat.tossUpPoints < 0 ? 'negative' : '';
+                const tossUpSign = stat.tossUpPoints > 0 ? '+' : '';
+
+                const bonusClass = stat.bonusPoints > 0 ? 'positive' : stat.bonusPoints < 0 ? 'negative' : '';
+                const bonusSign = stat.bonusPoints > 0 ? '+' : '';
+
                 // Rank medal for top 3
                 const medals = ['🥇', '🥈', '🥉'];
                 const rankDisplay = rank < 3 ? medals[rank] : `#${rank + 1}`;
@@ -2328,6 +2354,8 @@
                         <span class="score-sheet-name ${!stat.online ? 'offline' : ''}">${stat.name}${!stat.online ? ' 📴' : ''}</span>
                     </td>
                     <td><span class="score-sheet-points ${pointsClass}">${pointsSign}${stat.points}</span></td>
+                    <td><span class="score-sheet-points ${tossUpClass}" style="font-size:0.9rem;">${tossUpSign}${stat.tossUpPoints}</span></td>
+                    <td><span class="score-sheet-points ${bonusClass}" style="font-size:0.9rem;">${bonusSign}${stat.bonusPoints}</span></td>
                     <td><span class="score-sheet-pct">${pct}</span><br><span style="font-size:0.75rem; opacity:0.6;">${stat.correct}/${stat.firstBuzzes} 1st buzzes</span></td>
                 `;
                 body.appendChild(row);
@@ -2788,26 +2816,37 @@
                         name: pd.name,
                         online: pd.online !== false,
                         points: playerPoints[pid] || 0,
+                        tossUpPoints: 0, bonusPoints: 0,
                         firstBuzzes: 0, correct: 0
                     };
                 });
                 Object.values(scores).forEach(qScores => {
                     if (!qScores) return;
                     Object.entries(qScores).forEach(([pid, s]) => {
-                        if (!playerStats[pid] || typeof s !== 'object' || s.order !== 1) return;
-                        playerStats[pid].firstBuzzes++;
-                        if (s.correct) playerStats[pid].correct++;
+                        if (!playerStats[pid] || typeof s !== 'object') return;
+                        playerStats[pid].tossUpPoints += s.pointsAwarded || 0;
+                        if (s.order === 1) {
+                            playerStats[pid].firstBuzzes++;
+                            if (s.correct) playerStats[pid].correct++;
+                        }
+                    });
+                });
+                Object.values(bonusScores).forEach(bqScores => {
+                    if (!bqScores) return;
+                    Object.entries(bqScores).forEach(([pid, s]) => {
+                        if (!playerStats[pid] || typeof s !== 'object') return;
+                        playerStats[pid].bonusPoints += s.pointsAwarded || 0;
                     });
                 });
                 const sorted = Object.values(playerStats).sort((a, b) => b.points - a.points);
-                const rows = [['Rank', 'Player', 'Status', 'Points', 'Correct %', 'Correct / 1st Buzzes']];
+                const rows = [['Rank', 'Player', 'Status', 'Points', 'Toss-Up Pts', 'Bonus Pts', 'Correct %', 'Correct / 1st Buzzes']];
                 sorted.forEach((s, i) => {
                     const pct = s.firstBuzzes > 0 ? ((s.correct / s.firstBuzzes) * 100).toFixed(0) + '%' : '—';
-                    rows.push([i + 1, s.name, s.online ? 'Online' : 'Offline', s.points, pct, `${s.correct}/${s.firstBuzzes}`]);
+                    rows.push([i + 1, s.name, s.online ? 'Online' : 'Offline', s.points, s.tossUpPoints, s.bonusPoints, pct, `${s.correct}/${s.firstBuzzes}`]);
                 });
                 const ws = XLSX.utils.aoa_to_sheet(rows);
-                styleSheetHeader(ws, 6);
-                ws['!cols'] = [{ wch: 8 }, { wch: 18 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 22 }];
+                styleSheetHeader(ws, 8);
+                ws['!cols'] = [{ wch: 8 }, { wch: 18 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 22 }];
                 XLSX.utils.book_append_sheet(wb, ws, 'Score Sheet');
             }
 
