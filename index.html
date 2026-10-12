@@ -814,6 +814,17 @@
             font-size: 1rem;
         }
 
+        .score-table tr.live-score-row td {
+            background: rgba(255, 215, 0, 0.08);
+            border-bottom: 2px solid var(--gold);
+            font-weight: 700;
+        }
+
+        .score-table tr.live-score-row td.question-cell {
+            color: var(--gold);
+            letter-spacing: 0.05em;
+        }
+
         .spectators-list {
             display: flex;
             flex-wrap: wrap;
@@ -2162,6 +2173,32 @@
         };
 
         // Update score table
+        // Builds the pinned "Live Score" row showing each player's current total
+        // points, in the same column order as the table header.
+        function buildLiveScoreRow(gameData) {
+            const players = gameData.players || {};
+            const playerPoints = gameData.playerPoints || {};
+
+            const row = document.createElement('tr');
+            row.className = 'live-score-row';
+
+            const labelCell = document.createElement('td');
+            labelCell.className = 'question-cell';
+            labelCell.innerHTML = '📊 LIVE SCORE';
+            row.appendChild(labelCell);
+
+            Object.keys(players).forEach(playerId => {
+                const pts = playerPoints[playerId] || 0;
+                const cls = pts > 0 ? 'positive' : pts < 0 ? 'negative' : '';
+                const sign = pts > 0 ? '+' : '';
+                const cell = document.createElement('td');
+                cell.innerHTML = `<span class="score-sheet-points ${cls}">${sign}${pts}</span>`;
+                row.appendChild(cell);
+            });
+
+            return row;
+        }
+
         function updateScoreTable(gameData) {
             const players = gameData.players || {};
             const scores = gameData.scores || {};
@@ -2180,6 +2217,7 @@
 
             // Update body with scores
             body.innerHTML = '';
+            body.appendChild(buildLiveScoreRow(gameData));
             const categories = gameData.categories || {};
             
             for (let q = 1; q <= currentQ; q++) {
@@ -2611,6 +2649,7 @@
 
             // Build one row per question (same number as toss-up)
             body.innerHTML = '';
+            body.appendChild(buildLiveScoreRow(gameData));
             for (let q = 1; q <= currentQ; q++) {
                 const row = document.createElement('tr');
                 const cat = bonusCategories[`BQ${q}`];
