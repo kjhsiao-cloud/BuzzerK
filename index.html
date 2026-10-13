@@ -1472,7 +1472,7 @@
     <!-- Firebase SDK -->
     <script type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-        import { getDatabase, ref, set, push, onValue, update, remove, get, onDisconnect } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
+        import { getDatabase, ref, set, push, onValue, update, remove, get, onDisconnect, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
 
         // Firebase configuration
         const firebaseConfig = {
@@ -1782,6 +1782,7 @@
                 }
 
                 const gameData = snapshot.val();
+                window.latestBuzzes = gameData.buzzes || {};
                 
                 if (window.isHost || window.isSpectator) {
                     // Spectators see the exact same scoring page as the host
@@ -1857,7 +1858,7 @@
                         statusText = '🔴 FIRST!';
                     } else {
                         card.classList.add('buzzed');
-                        const diffMs = buzz.time - gameData.firstBuzzTime;
+                        const diffMs = buzz.time - buzzesArray[0].time;
                         const diffSeconds = (diffMs / 1000).toFixed(3);
                         statusText = '⚡ Buzzed';
                         timeDiffHTML = `<div class="time-diff">+${diffSeconds}s</div>`;
@@ -1954,7 +1955,7 @@
                 } else {
                     // Other buzzers - turn BLUE
                     button.classList.add('buzzed-other');
-                    const diffMs = myBuzz.time - gameData.firstBuzzTime;
+                    const diffMs = myBuzz.time - buzzesArray[0].time;
                     const diffSeconds = (diffMs / 1000).toFixed(3);
                     indicator.textContent = `⚡ Buzzed! +${diffSeconds}s after first`;
                     indicator.className = 'buzz-indicator';
@@ -1980,7 +1981,7 @@
 
                 let timeDisplay = 'FIRST';
                 if (index > 0) {
-                    const diffMs = buzz.time - gameData.firstBuzzTime;
+                    const diffMs = buzz.time - buzzesArray[0].time;
                     const diffSeconds = (diffMs / 1000).toFixed(3);
                     timeDisplay = `+${diffSeconds}s`;
                 }
@@ -1996,35 +1997,29 @@
         }
 
         // Buzz action
+        // The buzz time is stamped by the Firebase SERVER (not the device clock), so
+        // the order can't be skewed by clock differences between phones/laptops.
+        // It also writes immediately (no read first) so a slow connection doesn't add delay.
         window.buzz = async function() {
             if (!window.currentGame || !window.currentPlayer) return;
 
-            const gameRef = ref(database, `games/${window.currentGame}`);
-            const snapshot = await get(gameRef);
-            
-            if (!snapshot.exists()) return;
+            const playerId = window.currentPlayer.id;
 
-            const gameData = snapshot.val();
-            const buzzes = gameData.buzzes || {};
+            // Already buzzed this round, or a buzz is still being sent
+            if (window.latestBuzzes && window.latestBuzzes[playerId]) return;
+            if (window.buzzInFlight) return;
+            window.buzzInFlight = true;
 
-            // Check if already buzzed
-            if (buzzes[window.currentPlayer.id]) return;
-
-            const buzzTime = Date.now();
-
-            // Update first buzz time if needed
-            const updates = {};
-            if (!gameData.firstBuzzTime) {
-                updates[`games/${window.currentGame}/firstBuzzTime`] = buzzTime;
+            try {
+                await set(ref(database, `games/${window.currentGame}/buzzes/${playerId}`), {
+                    playerName: window.currentPlayer.name,
+                    time: serverTimestamp()
+                });
+            } catch (err) {
+                console.error('Buzz failed:', err);
+            } finally {
+                window.buzzInFlight = false;
             }
-
-            // Add buzz
-            updates[`games/${window.currentGame}/buzzes/${window.currentPlayer.id}`] = {
-                playerName: window.currentPlayer.name,
-                time: buzzTime
-            };
-
-            await update(ref(database), updates);
         };
 
         // Mark answer as correct or incorrect
