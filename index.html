@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BuzzRush - Real-time Buzzer Game</title>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
     <style>
         :root {
             --electric-blue: #00d4ff;
@@ -2769,15 +2769,288 @@
         };
 
 
-        // Export all 4 tables to Excel
-        window.exportToExcel = async function() {
-            if (!window.currentGame) return;
+        // <export-builder>
+        // ── Excel export (ExcelJS) ──────────────────────────────────────────
+        // First sheet reproduces the layout/style of the "template." tab in the
+        // Science Bowl practice scoring workbook. Supporting tabs follow it.
 
-            const gameRef = ref(database, `games/${window.currentGame}`);
-            const snapshot = await get(gameRef);
-            if (!snapshot.exists()) return;
-            const g = snapshot.val();
+        // Topic names used by that template (also feeds the Topic dropdown)
+        const SB_TOPICS = ['Earth and Space Science', 'Life Science', 'Physical Science', 'Energy', 'Math', 'General science', 'Misc.'];
+        const SB_TOPIC_MAP = {
+            'Math': 'Math',
+            'Life Science': 'Life Science',
+            'Earth Science': 'Earth and Space Science',
+            'Physical Science': 'Physical Science',
+            'General Science': 'General science',
+            'Energy': 'Energy',
+            // category names from older games
+            'Biology': 'Life Science',
+            'Earth': 'Earth and Space Science',
+            'Space': 'Earth and Space Science',
+            'Physics': 'Physical Science',
+            'Chemistry': 'Physical Science'
+        };
+        function toSbTopic(cat) {
+            if (!cat) return '';
+            return SB_TOPIC_MAP[cat] || 'Misc.';
+        }
 
+        // 1 -> A, 27 -> AA
+        function xlColLetter(n) {
+            let s = '';
+            while (n > 0) {
+                const m = (n - 1) % 26;
+                s = String.fromCharCode(65 + m) + s;
+                n = Math.floor((n - 1) / 26);
+            }
+            return s;
+        }
+
+        function addScoringTemplateSheet(wb, g, gameCode, sheetName) {
+            const playerEntries = Object.entries(g.players || {});
+            const scores = g.scores || {};
+            const bonusScores = g.bonusScores || {};
+            const categories = g.categories || {};
+            const bonusCategories = g.bonusCategories || {};
+            const playedQ = Math.max(1, g.currentQuestion || 1);
+
+            // Column map (identical to the template when there are 13 players:
+            // players C..O, Team captain P, Topics R, summary S..)
+            const N = playerEntries.length;
+            const FIRST_COL = 3;
+            const LAST_COL = FIRST_COL + N - 1;
+            const CAP_COL = FIRST_COL + N;
+            const TOPIC_COL = CAP_COL + 2;
+            const PIV_COL = CAP_COL + 3;
+            const R0 = 12, R1 = 251;            // first / last question row
+            const topicL = xlColLetter(TOPIC_COL);
+            const pivL = xlColLetter(PIV_COL);
+
+            const ws = wb.addWorksheet(sheetName, {
+                properties: { defaultColWidth: 12.63, defaultRowHeight: 15.75 },
+                views: [{ state: 'frozen', ySplit: 2, topLeftCell: 'A3' }]
+            });
+
+            // ── style helpers ──
+            const arial = (size = 10, extra = {}) => ({ name: 'Arial', size, ...extra });
+            const calibri = (size = 11, extra = {}) => ({ name: 'Calibri', size, ...extra });
+            const solid = (argb) => ({ type: 'pattern', pattern: 'solid', fgColor: { argb } });
+            const center = { horizontal: 'center', vertical: 'bottom' };
+            const put = (r, c, value, st = {}) => {
+                const cell = ws.getCell(r, c);
+                if (value !== undefined) cell.value = value;
+                if (st.font) cell.font = st.font;
+                if (st.fill) cell.fill = st.fill;
+                if (st.alignment) cell.alignment = st.alignment;
+                if (st.numFmt) cell.numFmt = st.numFmt;
+                return cell;
+            };
+
+            // ── marks grid: 2 rows per question (toss-up, then bonus) ──
+            // Values follow the template's convention: 1 = correct, -1 = incorrect
+            const markFor = (s) => {
+                if (s === undefined || s === null) return null;
+                if (typeof s === 'object') return s.correct ? 1 : -1;
+                return s ? 1 : -1;               // older boolean format
+            };
+            const colVals = playerEntries.map(([pid]) => {
+                const vals = new Array(R1 - R0 + 1).fill(null);
+                for (let q = 1; q <= playedQ; q++) {
+                    const t = markFor((scores[`Q${q}`] || {})[pid]);
+                    const b = markFor((bonusScores[`BQ${q}`] || {})[pid]);
+                    if (t !== null) vals[(q - 1) * 2] = t;
+                    if (b !== null) vals[(q - 1) * 2 + 1] = b;
+                }
+                return vals;
+            });
+
+            // ── rows 1–9: header + per-player summary ──
+            put(1, 1, `Game ${gameCode}`, { font: arial(9) });
+            put(2, 1, 'Correct Answers', { font: arial(9) });
+            put(3, 1, 'Incorrect answers', { font: arial(10, { italic: true }) });
+            put(4, 1, '# Tossup marks', { font: arial(10) });
+            put(5, 1, '% incorrect', { font: arial(10) });
+            put(6, 1, '% power mark', { font: arial(10) });
+            put(7, 1, 'Player got 7 at q#', { font: arial(10) });
+            put(8, 1, 'Extra points for getting 7 early \n(assuming 96 questions - full 24Q set)', { font: arial(8), alignment: { wrapText: true, vertical: 'middle' } });
+            put(9, 1, 'Total Points \n(incl. extra for getting 7 early, no penalty for negs)', { font: arial(8, { bold: true }), alignment: { wrapText: true, vertical: 'middle' } });
+            ws.mergeCells(8, 1, 8, 2);
+            ws.mergeCells(9, 1, 9, 2);
+            ws.getRow(8).height = 26;
+            ws.getRow(9).height = 36;
+            put(10, 1, 'Question', { font: arial(10, { bold: true }) });
+            put(10, 2, 'Topic', { font: calibri(11, { bold: true }) });
+
+            playerEntries.forEach(([pid, p], i) => {
+                const c = FIRST_COL + i;
+                const L = xlColLetter(c);
+                const rng = `${L}${R0}:${L}${R1}`;
+                const vals = colVals[i].map(v => (v === null ? 0 : v));
+                const correct = vals.filter(v => v >= 1).length;
+                const incorrect = vals.filter(v => v === -1).length;
+                const power = vals.filter(v => v === 4).length;
+                let q7 = 0;
+                if (correct >= 7) {
+                    let seen = 0;
+                    for (let k = 0; k < vals.length; k++) {
+                        if (vals[k] >= 1 && ++seen === 7) { q7 = k + 1; break; }
+                    }
+                }
+                const extra = q7 !== 0 ? 102 - q7 : 0;
+                const total = vals.reduce((a, b) => a + b, 0) + extra;
+
+                put(1, c, p.name, { font: arial(9, { bold: true }), alignment: center });
+                put(2, c, { formula: `COUNTIF(${rng},">=1")`, result: correct }, { font: arial(9, { bold: true }), alignment: center });
+                put(3, c, { formula: `COUNTIF(${rng},"-1")`, result: incorrect }, { font: arial(10), alignment: center });
+                put(4, c, { formula: `COUNTIF(${rng},"=4")`, result: power }, { font: arial(10), alignment: center });
+                put(5, c, { formula: `IF(${L}2=0,"-",${L}3/${L}2)`, result: correct === 0 ? '-' : incorrect / correct }, { font: arial(10), alignment: center, numFmt: '0%' });
+                put(6, c, { formula: `IF(${L}2=0,"-",${L}4/${L}2)`, result: correct === 0 ? '-' : power / correct }, { font: arial(10), alignment: center, numFmt: '0%' });
+                // Native replacement for the Google Sheets custom function question7():
+                // position (counted from the first question row) of the player's 7th correct answer, 0 if fewer than 7
+                put(7, c, {
+                    formula: `IF(${L}2>=7,SUMPRODUCT(SMALL((${L}$${R0}:${L}$${R1}>=1)*(ROW(${L}$${R0}:${L}$${R1})-ROW(${L}$${R0})+1)+(${L}$${R0}:${L}$${R1}<1)*1000,7)),0)`,
+                    result: q7
+                }, { font: arial(10), alignment: center });
+                put(8, c, { formula: `IF(${L}7<>0,102-${L}7,0)`, result: extra }, { font: arial(10), alignment: center });
+                put(9, c, { formula: `SUM(${rng})+${L}8`, result: total }, { font: arial(10, { bold: true }), alignment: center });
+
+                // header band repeated above the grid
+                put(11, c, p.name, { font: arial(9, { bold: true }), fill: solid('FFBDBDBD'), alignment: center });
+            });
+            put(11, 1, undefined, { fill: solid('FFBDBDBD'), alignment: { horizontal: 'right', vertical: 'bottom' } });
+            put(11, 2, undefined, { fill: solid('FFBDBDBD') });
+            put(11, CAP_COL, 'Team captain', { font: arial(10, { bold: true }), fill: solid('FFBDBDBD') });
+            ws.getCell(7, 1).note = 'Native replacement for the Google Sheets function question7(): the row position (counted from the first question row) of the player\'s 7th correct answer, or 0 if they have fewer than 7.';
+            ws.getCell(11, CAP_COL).note = 'Inferred by BuzzRush: the player who answered the most bonus questions in each block of 5 questions.';
+
+            // ── question rows: banded, 2 rows per question number ──
+            for (let r = R0; r <= R1; r++) {
+                const isTossUp = (r - R0) % 2 === 0;
+                const q = Math.floor((r - R0) / 2) + 1;
+                const fillArgb = isTossUp ? 'FFFFFFFF' : 'FFF3F3F3';
+                const topic = q <= playedQ ? toSbTopic(categories[`Q${q}`] || bonusCategories[`BQ${q}`]) : '';
+
+                // Question number: typed values for played questions, formulas after that
+                let aVal;
+                if (q <= playedQ) aVal = q;
+                else if (r === R0) aVal = 1;
+                else aVal = isTossUp ? { formula: `A${r - 1}+1`, result: q } : { formula: `A${r - 1}`, result: q };
+                put(r, 1, aVal, { font: arial(10), fill: solid(fillArgb), alignment: { horizontal: 'right', vertical: 'bottom' } });
+                put(r, 2, topic || undefined, { font: calibri(11), fill: solid(fillArgb), alignment: { vertical: 'bottom' } });
+
+                for (let i = 0; i < N; i++) {
+                    const v = colVals[i][r - R0];
+                    put(r, FIRST_COL + i, v === null ? undefined : v, { font: calibri(11), fill: solid(fillArgb), alignment: center });
+                }
+                put(r, CAP_COL, undefined, { fill: solid('FFFFFFFF') });
+            }
+
+            // ── team captain: merged per block of 5 questions (10 rows) ──
+            const blocks = Math.max(1, Math.ceil(playedQ / 5));
+            for (let b = 0; b < blocks; b++) {
+                const top = R0 + 10 * b;
+                const counts = playerEntries.map(() => 0);
+                for (let q = 5 * b + 1; q <= Math.min(5 * b + 5, playedQ); q++) {
+                    const bq = bonusScores[`BQ${q}`] || {};
+                    playerEntries.forEach(([pid], i) => { if (bq[pid] !== undefined && bq[pid] !== null) counts[i]++; });
+                }
+                let best = 0, bi = -1;
+                counts.forEach((n, i) => { if (n > best) { best = n; bi = i; } });
+                ws.mergeCells(top, CAP_COL, top + 9, CAP_COL);
+                put(top, CAP_COL, bi >= 0 ? playerEntries[bi][1].name : undefined, {
+                    font: calibri(11), fill: solid('FFFFFFFF'), alignment: { horizontal: 'center', vertical: 'middle' }
+                });
+            }
+
+            // ── topics list (feeds the dropdown) ──
+            put(3, TOPIC_COL, 'Topics', { font: calibri(11) });
+            SB_TOPICS.forEach((t, k) => put(4 + k, TOPIC_COL, t, { font: calibri(11) }));
+            ws.dataValidations.add(`B${R0}:B${R1}`, {
+                type: 'list',
+                allowBlank: true,
+                formulae: [`$${topicL}$4:$${topicL}$10`],
+                showErrorMessage: true,
+                errorStyle: 'warning',
+                errorTitle: 'Topic',
+                error: 'This topic is not in the Topics list.'
+            });
+
+            // ── packet link label + topic-by-player summary (static pivot in the template; live formulas here) ──
+            put(16, PIV_COL, 'Link to packet', { font: arial(10) });
+            const pivTopics = SB_TOPICS.slice().sort((a, b) => a.localeCompare(b));
+            const PIV_HDR = 20, PIV_FIRST = 21;
+            const PIV_LAST = PIV_FIRST + pivTopics.length;       // last topic row
+            const PIV_TOTAL = PIV_LAST + 1;
+            put(PIV_FIRST, PIV_COL, '(blank)', { font: arial(10) });
+            pivTopics.forEach((t, k) => put(PIV_FIRST + 1 + k, PIV_COL, t, { font: arial(10) }));
+            put(PIV_TOTAL, PIV_COL, 'Grand Total', { font: arial(10) });
+
+            playerEntries.forEach(([pid, p], i) => {
+                const c = PIV_COL + 1 + i;
+                const L = xlColLetter(FIRST_COL + i);
+                const pl = xlColLetter(c);
+                const sumRange = `${L}$${R0}:${L}$${R1}`;
+                const topicRange = `$B$${R0}:$B$${R1}`;
+                const vals = colVals[i];
+                const sumFor = (pred) => vals.reduce((acc, v, k) => {
+                    const q = Math.floor(k / 2) + 1;
+                    const t = q <= playedQ ? toSbTopic(categories[`Q${q}`] || bonusCategories[`BQ${q}`]) : '';
+                    return pred(t) ? acc + (v || 0) : acc;
+                }, 0);
+                put(PIV_HDR, c, `SUM of ${p.name}`, { font: arial(10) });
+                const blankSum = sumFor(t => t === '');
+                put(PIV_FIRST, c, { formula: `SUMIF(${topicRange},"",${sumRange})`, result: blankSum }, { font: arial(10) });
+                let grand = blankSum;
+                pivTopics.forEach((t, k) => {
+                    const r = PIV_FIRST + 1 + k;
+                    const res = sumFor(x => x === t);
+                    grand += res;
+                    put(r, c, { formula: `SUMIF(${topicRange},$${pivL}${r},${sumRange})`, result: res }, { font: arial(10) });
+                });
+                put(PIV_TOTAL, c, { formula: `SUM(${pl}${PIV_FIRST}:${pl}${PIV_LAST})`, result: grand }, { font: arial(10) });
+            });
+
+            // ── conditional format: Correct Answers >= 7 turns green ──
+            if (N > 0) {
+                ws.addConditionalFormatting({
+                    ref: `${xlColLetter(FIRST_COL)}2:${xlColLetter(LAST_COL)}2`,
+                    rules: [{
+                        type: 'cellIs',
+                        operator: 'greaterThanOrEqual',
+                        formulae: [7],
+                        style: { fill: { type: 'pattern', pattern: 'solid', bgColor: { argb: 'FFB7E1CD' } } }
+                    }]
+                });
+            }
+
+            // ── column widths ──
+            ws.getColumn(1).width = 12.63;
+            ws.getColumn(2).width = 22;
+            for (let c = FIRST_COL; c <= LAST_COL; c++) ws.getColumn(c).width = 12.38;
+            ws.getColumn(CAP_COL).width = 17.25;
+            ws.getColumn(TOPIC_COL).width = 22;
+            ws.getColumn(PIV_COL).width = 24;
+            for (let i = 0; i < N; i++) ws.getColumn(PIV_COL + 1 + i).width = 14.63;
+            return ws;
+        }
+
+        // Plain table tab (header row styled)
+        function addTableSheet(wb, name, rows, widths) {
+            const ws = wb.addWorksheet(name);
+            rows.forEach(r => ws.addRow(r));
+            widths.forEach((w, i) => { ws.getColumn(i + 1).width = w; });
+            const header = ws.getRow(1);
+            for (let c = 1; c <= rows[0].length; c++) {
+                const cell = header.getCell(c);
+                cell.font = { name: 'Arial', bold: true, color: { argb: 'FFFFFFFF' } };
+                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1A0033' } };
+                cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+            }
+            header.height = 20;
+            return ws;
+        }
+
+        function buildExportWorkbook(g, gameCode, now = new Date()) {
             const players = g.players || {};
             const scores = g.scores || {};
             const bonusScores = g.bonusScores || {};
@@ -2789,15 +3062,22 @@
             const playerEntries = Object.entries(players);
             const playerNames = playerEntries.map(([, p]) => p.name);
 
-            const wb = XLSX.utils.book_new();
+            const wb = new ExcelJS.Workbook();
+            wb.creator = 'BuzzRush';
+            wb.created = now;
 
-            // ── Helper ──────────────────────────────────────────
             const subjectIcons = {
                 'Math':'📐','Life Science':'🧬','Earth Science':'🌍',
                 'Physical Science':'⚛️','General Science':'🔬','Energy':'⚡'
             };
 
-            // ── Sheet 1: Toss-Up Question Tracker ───────────────
+            // ── Sheet 1: scoring sheet in the "template." layout, named by date (MMDDYY) ──
+            const mm = String(now.getMonth() + 1).padStart(2, '0');
+            const dd = String(now.getDate()).padStart(2, '0');
+            const yy = String(now.getFullYear()).slice(-2);
+            addScoringTemplateSheet(wb, g, gameCode, `${mm}${dd}${yy}`);
+
+            // ── Sheet 2: Toss-Up Question Tracker ───────────────
             {
                 const rows = [['Question', ...playerNames]];
                 for (let q = 1; q <= currentQ; q++) {
@@ -2821,13 +3101,10 @@
                     });
                     rows.push(row);
                 }
-                const ws = XLSX.utils.aoa_to_sheet(rows);
-                styleSheetHeader(ws, playerNames.length + 1);
-                ws['!cols'] = [{ wch: 22 }, ...playerNames.map(() => ({ wch: 20 }))];
-                XLSX.utils.book_append_sheet(wb, ws, 'Toss-Up Tracker');
+                addTableSheet(wb, 'Toss-Up Tracker', rows, [22, ...playerNames.map(() => 20)]);
             }
 
-            // ── Sheet 2: Bonus Question ──────────────────────────
+            // ── Sheet 3: Bonus Question ──────────────────────────
             {
                 const rows = [['Bonus Q', ...playerNames]];
                 for (let q = 1; q <= currentQ; q++) {
@@ -2841,13 +3118,10 @@
                     });
                     rows.push(row);
                 }
-                const ws = XLSX.utils.aoa_to_sheet(rows);
-                styleSheetHeader(ws, playerNames.length + 1);
-                ws['!cols'] = [{ wch: 22 }, ...playerNames.map(() => ({ wch: 16 }))];
-                XLSX.utils.book_append_sheet(wb, ws, 'Bonus Questions');
+                addTableSheet(wb, 'Bonus Questions', rows, [22, ...playerNames.map(() => 16)]);
             }
 
-            // ── Sheet 3: Score Sheet ─────────────────────────────
+            // ── Sheet 4: Score Sheet ─────────────────────────────
             {
                 const playerStats = {};
                 playerEntries.forEach(([pid, pd]) => {
@@ -2883,13 +3157,10 @@
                     const pct = s.firstBuzzes > 0 ? ((s.correct / s.firstBuzzes) * 100).toFixed(0) + '%' : '—';
                     rows.push([i + 1, s.name, s.online ? 'Online' : 'Offline', s.points, s.tossUpPoints, s.bonusPoints, pct, `${s.correct}/${s.firstBuzzes}`]);
                 });
-                const ws = XLSX.utils.aoa_to_sheet(rows);
-                styleSheetHeader(ws, 8);
-                ws['!cols'] = [{ wch: 8 }, { wch: 18 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 22 }];
-                XLSX.utils.book_append_sheet(wb, ws, 'Score Sheet');
+                addTableSheet(wb, 'Score Sheet', rows, [8, 18, 10, 10, 12, 12, 12, 22]);
             }
 
-            // ── Sheet 4: Subject Breakdown ────────────────────────
+            // ── Sheet 5: Subject Breakdown ────────────────────────
             {
                 const subjectSet = new Set(Object.values(categories).filter(Boolean));
                 const subjects = [...subjectSet].sort();
@@ -2921,31 +3192,40 @@
                     });
                     rows.push(row);
                 });
-                const ws = XLSX.utils.aoa_to_sheet(rows);
-                styleSheetHeader(ws, header.length);
-                ws['!cols'] = [{ wch: 18 }, { wch: 16 }, ...playerNames.flatMap(() => [{ wch: 10 }, { wch: 10 }, { wch: 10 }])];
-                XLSX.utils.book_append_sheet(wb, ws, 'Subject Breakdown');
+                addTableSheet(wb, 'Subject Breakdown', rows, [18, 16, ...playerNames.flatMap(() => [10, 10, 10])]);
             }
 
-            // ── Download ─────────────────────────────────────────
-            const timestamp = new Date().toISOString().slice(0, 16).replace('T', '_').replace(':', '-');
-            XLSX.writeFile(wb, `BuzzRush_${window.currentGame}_${timestamp}.xlsx`);
-        };
-
-        // Style the first header row of a worksheet
-        function styleSheetHeader(ws, colCount) {
-            for (let c = 0; c < colCount; c++) {
-                const cell = XLSX.utils.encode_cell({ r: 0, c });
-                if (!ws[cell]) continue;
-                ws[cell].s = {
-                    font: { bold: true, color: { rgb: 'FFFFFF' }, name: 'Arial' },
-                    fill: { fgColor: { rgb: '1A0033' } },
-                    alignment: { horizontal: 'center', vertical: 'center', wrapText: true }
-                };
-            }
-            if (!ws['!rows']) ws['!rows'] = [];
-            ws['!rows'][0] = { hpt: 20 };
+            return wb;
         }
+        // </export-builder>
+
+        // Export to Excel: scoring sheet in the Science Bowl template style + supporting tabs
+        window.exportToExcel = async function() {
+            if (!window.currentGame) return;
+
+            const gameRef = ref(database, `games/${window.currentGame}`);
+            const snapshot = await get(gameRef);
+            if (!snapshot.exists()) return;
+            const g = snapshot.val();
+
+            if (typeof ExcelJS === 'undefined') {
+                alert('The Excel export library could not be loaded. Please check your internet connection and reload the page.');
+                return;
+            }
+
+            const wb = buildExportWorkbook(g, window.currentGame);
+            const buffer = await wb.xlsx.writeBuffer();
+            const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+
+            const timestamp = new Date().toISOString().slice(0, 16).replace('T', '_').replace(':', '-');
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `BuzzRush_${window.currentGame}_${timestamp}.xlsx`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            setTimeout(() => URL.revokeObjectURL(link.href), 2000);
+        };
 
         // Reset buzzers
         window.resetBuzzers = async function() {
