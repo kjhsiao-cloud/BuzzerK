@@ -825,6 +825,53 @@
             letter-spacing: 0.05em;
         }
 
+        .version-label {
+            position: fixed;
+            right: 8px;
+            bottom: 6px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.65rem;
+            color: rgba(255, 255, 255, 0.4);
+            z-index: 50;
+            pointer-events: none;
+        }
+
+        .update-banner {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            background: #ffb300;
+            color: #1a0033;
+            padding: 0.6rem 1rem;
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-align: center;
+            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.45);
+        }
+
+        .update-banner button {
+            padding: 0.3rem 0.9rem;
+            font-size: 0.8rem;
+            font-weight: 700;
+            border-radius: 6px;
+            border: 2px solid #1a0033;
+            background: #1a0033;
+            color: #ffb300;
+            cursor: pointer;
+        }
+
+        .update-banner button.ghost {
+            background: transparent;
+            color: #1a0033;
+        }
+
         .spectators-list {
             display: flex;
             flex-wrap: wrap;
@@ -1198,6 +1245,12 @@
     </style>
 </head>
 <body>
+    <div class="update-banner" id="updateBanner">
+        <span id="updateBannerText"></span>
+        <button onclick="reloadLatest()">Reload</button>
+        <button class="ghost" onclick="dismissUpdateBanner()">Dismiss</button>
+    </div>
+    <div class="version-label" id="versionLabel"></div>
     <div class="container">
         <header>
             <h1>BuzzRush</h1>
@@ -1301,15 +1354,15 @@
                 <div class="points-settings">
                     <div class="points-field">
                         <label for="pointsCorrect">✅ Points for Correct Answer</label>
-                        <input type="number" id="pointsCorrect" value="10" min="0" oninput="updatePointsSetting('correct', this.value)">
+                        <input type="number" id="pointsCorrect" value="1" min="0" oninput="updatePointsSetting('correct', this.value)">
                     </div>
                     <div class="points-field">
                         <label for="pointsWrong">❌ Points Deducted for Wrong Answer</label>
-                        <input type="number" id="pointsWrong" value="5" min="0" oninput="updatePointsSetting('wrong', this.value)">
+                        <input type="number" id="pointsWrong" value="0" min="0" oninput="updatePointsSetting('wrong', this.value)">
                     </div>
                     <div class="points-field">
                         <label for="pointsInterrupt">⚠️ Points Deducted for Interrupt + Wrong</label>
-                        <input type="number" id="pointsInterrupt" value="10" min="0" oninput="updatePointsSetting('interrupt', this.value)">
+                        <input type="number" id="pointsInterrupt" value="1" min="0" oninput="updatePointsSetting('interrupt', this.value)">
                     </div>
                 </div>
 
@@ -1491,6 +1544,109 @@
         const app = initializeApp(firebaseConfig);
         const database = getDatabase(app);
 
+        // ── Helpers for the points settings ─────────────────────────────
+        // Reads a points field; only falls back when it's blank/invalid, so a real 0 stays 0
+        function readPoints(elId, fallback) {
+            const n = parseInt(document.getElementById(elId)?.value);
+            return Number.isNaN(n) ? fallback : n;
+        }
+        // "-5" for a deduction, "0" when there is none (avoids showing "-0")
+        function lossLabel(n) {
+            return n === 0 ? '0' : '-' + n;
+        }
+
+        // ── App version + out-of-date detection ─────────────────────────
+        // Bump APP_VERSION (YYYY-MM-DD.NN) every time this file changes.
+        const APP_VERSION = '2026-10-12.01';
+
+        let latestDeployedVersion = null;   // version of the page currently on the server
+        let gameVersionMessage = null;      // set when this page and the host's page differ
+        let dismissedMessage = null;
+
+        document.getElementById('versionLabel').textContent = 'v' + APP_VERSION;
+
+        function refreshUpdateBanner() {
+            const banner = document.getElementById('updateBanner');
+            if (!banner) return;
+
+            let msg = null;
+            if (latestDeployedVersion && latestDeployedVersion !== APP_VERSION) {
+                msg = `⚠️ Out of date: you're on v${APP_VERSION}, the latest is v${latestDeployedVersion}.`;
+            } else if (gameVersionMessage) {
+                msg = gameVersionMessage;
+            }
+
+            if (!msg || msg === dismissedMessage) {
+                banner.style.display = 'none';
+                return;
+            }
+            if (window.isHost && window.currentGame) {
+                msg += ' Reloading ends your hosting session, so finish this game and export first.';
+            }
+            document.getElementById('updateBannerText').textContent = msg;
+            banner.style.display = 'flex';
+        }
+
+        window.reloadLatest = function() {
+            if (window.isHost && window.currentGame &&
+                !confirm('Reloading will end your hosting session for this game and it cannot be resumed. Reload anyway?')) {
+                return;
+            }
+            // New URL each time so the browser can't hand back its saved copy of the page
+            window.location.href = window.location.pathname + '?v=' + Date.now();
+        };
+
+        window.dismissUpdateBanner = function() {
+            // Remember the message without the host-only suffix
+            dismissedMessage = (latestDeployedVersion && latestDeployedVersion !== APP_VERSION)
+                ? `⚠️ Out of date: you're on v${APP_VERSION}, the latest is v${latestDeployedVersion}.`
+                : gameVersionMessage;
+            document.getElementById('updateBanner').style.display = 'none';
+        };
+
+        // Compare this page with the version the server is serving right now
+        async function checkDeployedVersion() {
+            try {
+                const res = await fetch(window.location.pathname + '?cb=' + Date.now(), { cache: 'no-store' });
+                if (!res.ok) return;
+                const text = await res.text();
+                // Built in two pieces so this code doesn't match itself
+                const key = 'const APP_' + 'VERSION = ' + "'";
+                const i = text.indexOf(key);
+                if (i < 0) return;                       // older page with no version: can't compare
+                const j = text.indexOf("'", i + key.length);
+                if (j < 0) return;
+                latestDeployedVersion = text.slice(i + key.length, j);
+                refreshUpdateBanner();
+            } catch (e) {
+                // offline, or opened as a local file: skip the check
+            }
+        }
+        checkDeployedVersion();
+        setInterval(checkDeployedVersion, 120000);
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) checkDeployedVersion();
+        });
+
+        // Compare this page with the page the host created the game on
+        function checkGameVersion(gameData) {
+            let msg = null;
+            if (!window.isHost) {
+                const hostVersion = gameData.appVersion;
+                if (!hostVersion) {
+                    msg = `⚠️ The host is on an older version than yours (v${APP_VERSION}). Ask the host to reload once this game is done.`;
+                } else if (hostVersion > APP_VERSION) {
+                    msg = `⚠️ Your page is older than the host's (you: v${APP_VERSION}, host: v${hostVersion}). Please reload.`;
+                } else if (hostVersion < APP_VERSION) {
+                    msg = `⚠️ The host is on an older version (host: v${hostVersion}, you: v${APP_VERSION}). Ask the host to reload once this game is done.`;
+                }
+            }
+            if (msg !== gameVersionMessage) {
+                gameVersionMessage = msg;
+                refreshUpdateBanner();
+            }
+        }
+
         // Global state
         window.db = database;
         window.currentGame = null;
@@ -1584,7 +1740,8 @@
                 bonusScores: {},
                 bonusCategories: {},
                 spectators: {},
-                pointsSettings: { correct: 10, wrong: 5, interrupt: 10 }
+                pointsSettings: { correct: 1, wrong: 0, interrupt: 1 },
+                appVersion: APP_VERSION
             });
 
             document.getElementById('displayGameCode').textContent = code;
@@ -1783,6 +1940,7 @@
 
                 const gameData = snapshot.val();
                 window.latestBuzzes = gameData.buzzes || {};
+                checkGameVersion(gameData);
                 
                 if (window.isHost || window.isSpectator) {
                     // Spectators see the exact same scoring page as the host
@@ -1869,11 +2027,11 @@
                     const isAnswered = currentScore !== undefined;
 
                     const psHint = gameData.pointsSettings || {};
-                    const ptCorrect = psHint.correct ?? (parseInt(document.getElementById('pointsCorrect')?.value) || 10);
-                    const ptWrong = psHint.wrong ?? (parseInt(document.getElementById('pointsWrong')?.value) || 5);
-                    const ptInterrupt = psHint.interrupt ?? (parseInt(document.getElementById('pointsInterrupt')?.value) || 10);
+                    const ptCorrect = psHint.correct ?? readPoints('pointsCorrect', 1);
+                    const ptWrong = psHint.wrong ?? readPoints('pointsWrong', 0);
+                    const ptInterrupt = psHint.interrupt ?? readPoints('pointsInterrupt', 1);
                     // Every buzzer (1st, 2nd, 3rd...) can now earn or lose points when marked
-                    const pointsHint = `<div style="font-size:0.7rem; color: rgba(255,255,255,0.5); margin-bottom:0.3rem;">✅ +${ptCorrect}pts &nbsp; ❌ -${ptWrong}pts &nbsp; ⚠️ -${ptInterrupt}pts</div>`;
+                    const pointsHint = `<div style="font-size:0.7rem; color: rgba(255,255,255,0.5); margin-bottom:0.3rem;">✅ +${ptCorrect}pts &nbsp; ❌ ${lossLabel(ptWrong)}pts &nbsp; ⚠️ ${lossLabel(ptInterrupt)}pts</div>`;
 
                     scoreButtonsHTML = `
                         ${pointsHint}
@@ -2057,9 +2215,9 @@
             // Read the authoritative value saved in Firebase first (survives reloads/
             // multiple tabs); fall back to the on-screen field only for older games.
             const ps1 = gameData.pointsSettings || {};
-            const pointsCorrect = ps1.correct ?? (parseInt(document.getElementById('pointsCorrect').value) || 10);
-            const pointsWrong = ps1.wrong ?? (parseInt(document.getElementById('pointsWrong').value) || 5);
-            const pointsAwarded = isCorrect ? pointsCorrect : -pointsWrong;
+            const pointsCorrect = ps1.correct ?? readPoints('pointsCorrect', 1);
+            const pointsWrong = ps1.wrong ?? readPoints('pointsWrong', 0);
+            const pointsAwarded = isCorrect ? pointsCorrect : 0 - pointsWrong;
 
             // Build the complete score object in one go (avoids Firebase conflicting path error)
             const scoreObject = {
@@ -2111,8 +2269,8 @@
             }
 
             const ps2 = gameData.pointsSettings || {};
-            const pointsInterrupt = ps2.interrupt ?? (parseInt(document.getElementById('pointsInterrupt').value) || 10);
-            const pointsAwarded = -pointsInterrupt;
+            const pointsInterrupt = ps2.interrupt ?? readPoints('pointsInterrupt', 1);
+            const pointsAwarded = 0 - pointsInterrupt;
 
             const scoreObject = {
                 correct: false,
@@ -2569,9 +2727,9 @@
 
             // Bonus answers earn/lose points too, using the same points settings as toss-up
             const ps3 = gameData.pointsSettings || {};
-            const pointsCorrect = ps3.correct ?? (parseInt(document.getElementById('pointsCorrect').value) || 10);
-            const pointsWrong = ps3.wrong ?? (parseInt(document.getElementById('pointsWrong').value) || 5);
-            const pointsAwarded = isCorrect ? pointsCorrect : -pointsWrong;
+            const pointsCorrect = ps3.correct ?? readPoints('pointsCorrect', 1);
+            const pointsWrong = ps3.wrong ?? readPoints('pointsWrong', 0);
+            const pointsAwarded = isCorrect ? pointsCorrect : 0 - pointsWrong;
 
             const updates = {};
             updates[`games/${window.currentGame}/bonusScores/BQ${currentQ}/${playerId}`] = {
@@ -2683,11 +2841,11 @@
                     } else if (isCurrent) {
                         // Current question — show points hint + O/X buttons
                         const psBonusHint = gameData.pointsSettings || {};
-                        const ptCorrect = psBonusHint.correct ?? (parseInt(document.getElementById('pointsCorrect')?.value) || 10);
-                        const ptWrong = psBonusHint.wrong ?? (parseInt(document.getElementById('pointsWrong')?.value) || 5);
+                        const ptCorrect = psBonusHint.correct ?? readPoints('pointsCorrect', 1);
+                        const ptWrong = psBonusHint.wrong ?? readPoints('pointsWrong', 0);
                         cell.innerHTML = `
                             <div class="bonus-ox-cell">
-                                <div style="font-size:0.65rem; color: rgba(255,255,255,0.5); margin-bottom:0.2rem;">+${ptCorrect}/-${ptWrong}</div>
+                                <div style="font-size:0.65rem; color: rgba(255,255,255,0.5); margin-bottom:0.2rem;">+${ptCorrect}/${lossLabel(ptWrong)}</div>
                                 <div class="score-buttons">
                                     <button class="score-btn correct-btn" onclick="markBonus('${playerId}', true)">O</button>
                                     <button class="score-btn incorrect-btn" onclick="markBonus('${playerId}', false)">X</button>
