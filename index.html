@@ -825,6 +825,28 @@
             letter-spacing: 0.05em;
         }
 
+        .sound-toggle {
+            display: block;
+            margin: 0 auto 1.2rem;
+            padding: 0.4rem 1.1rem;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.7rem;
+            font-weight: 700;
+            letter-spacing: 0.1em;
+            border-radius: 20px;
+            border: 1.5px solid #00ff88;
+            background: rgba(0, 255, 136, 0.12);
+            color: #00ff88;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .sound-toggle.off {
+            border-color: rgba(255, 255, 255, 0.3);
+            background: rgba(255, 255, 255, 0.05);
+            color: rgba(255, 255, 255, 0.5);
+        }
+
         .version-label {
             position: fixed;
             right: 8px;
@@ -1346,6 +1368,8 @@
                     <div class="game-code" id="displayGameCode">----</div>
                 </div>
 
+                <button class="sound-toggle" onclick="toggleSound()">🔊 SOUND ON</button>
+
                 <div class="info-banner">
                     Players can join using this code. Press "Reset" to allow new buzzes.
                 </div>
@@ -1502,6 +1526,8 @@
                     <div style="font-family: 'Orbitron', sans-serif; font-size: 2rem; color: var(--gold);" id="playerGameCode">----</div>
                 </div>
 
+                <button class="sound-toggle" onclick="toggleSound()">🔊 SOUND ON</button>
+
                 <div class="buzz-indicator" id="buzzIndicator">
                     Ready to buzz!
                 </div>
@@ -1557,7 +1583,7 @@
 
         // ── App version + out-of-date detection ─────────────────────────
         // Bump APP_VERSION (YYYY-MM-DD.NN) every time this file changes.
-        const APP_VERSION = '2026-10-12.01';
+        const APP_VERSION = '2026-10-12.02';
 
         let latestDeployedVersion = null;   // version of the page currently on the server
         let gameVersionMessage = null;      // set when this page and the host's page differ
@@ -1646,6 +1672,138 @@
                 refreshUpdateBanner();
             }
         }
+
+        // <buzz-sound>
+        // ── Buzz sound effect ───────────────────────────────────────────
+        // Plays when the FIRST buzzer buzzes: on the host/spectator screens, and on
+        // the device of the player who buzzed first. Each device has its own on/off switch.
+        let soundEnabled = true;
+        try { soundEnabled = localStorage.getItem('buzzrush_sound') !== 'off'; } catch (e) {}
+
+        let audioCtx = null;
+        function getAudioCtx() {
+            if (!audioCtx) {
+                const AC = window.AudioContext || window.webkitAudioContext;
+                if (!AC) return null;
+                audioCtx = new AC();
+            }
+            return audioCtx;
+        }
+
+        // Browsers only allow sound after a tap/click, so unlock audio on the first one
+        function unlockAudio() {
+            const ctx = getAudioCtx();
+            if (ctx && ctx.state === 'suspended') ctx.resume();
+        }
+        ['pointerdown', 'touchstart', 'keydown', 'click'].forEach(ev =>
+            document.addEventListener(ev, unlockAudio, { passive: true }));
+
+        // A short "bzzt" followed by a bell "ding"
+        function playBuzzSound() {
+            if (!soundEnabled) return;
+            const ctx = getAudioCtx();
+            if (!ctx) return;
+            if (ctx.state === 'suspended') ctx.resume();
+            const t0 = ctx.currentTime + 0.02;
+
+            const buzz = ctx.createOscillator();
+            const buzzGain = ctx.createGain();
+            buzz.type = 'sawtooth';
+            buzz.frequency.setValueAtTime(150, t0);
+            buzzGain.gain.setValueAtTime(0.0001, t0);
+            buzzGain.gain.exponentialRampToValueAtTime(0.2, t0 + 0.02);
+            buzzGain.gain.setValueAtTime(0.2, t0 + 0.13);
+            buzzGain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.2);
+            buzz.connect(buzzGain).connect(ctx.destination);
+            buzz.start(t0);
+            buzz.stop(t0 + 0.22);
+
+            [[880, 0.22], [1318.5, 0.1]].forEach(([freq, peak]) => {
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                const ts = t0 + 0.18;
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(freq, ts);
+                gain.gain.setValueAtTime(0.0001, ts);
+                gain.gain.exponentialRampToValueAtTime(peak, ts + 0.01);
+                gain.gain.exponentialRampToValueAtTime(0.0001, ts + 0.7);
+                osc.connect(gain).connect(ctx.destination);
+                osc.start(ts);
+                osc.stop(ts + 0.75);
+            });
+        }
+
+        function updateSoundToggleUI() {
+            document.querySelectorAll('.sound-toggle').forEach(btn => {
+                btn.textContent = soundEnabled ? '🔊 SOUND ON' : '🔇 SOUND OFF';
+                btn.classList.toggle('off', !soundEnabled);
+            });
+        }
+
+        window.toggleSound = function() {
+            soundEnabled = !soundEnabled;
+            try { localStorage.setItem('buzzrush_sound', soundEnabled ? 'on' : 'off'); } catch (e) {}
+            updateSoundToggleUI();
+            if (soundEnabled) {
+                unlockAudio();
+                playBuzzSound();   // preview so you can hear it's working
+            }
+        };
+        updateSoundToggleUI();
+
+        // Decides when to play: once per round, when the first buzz appears
+        const buzzSoundState = { initialized: false, played: false, timer: null };
+
+        function resetBuzzSoundState() {
+            clearTimeout(buzzSoundState.timer);
+            buzzSoundState.initialized = false;
+            buzzSoundState.played = false;
+            buzzSoundState.timer = null;
+        }
+
+        function firstBuzzerId(buzzes) {
+            const arr = Object.entries(buzzes || {})
+                .map(([id, d]) => ({ id, time: d && d.time }))
+                .sort((a, b) => a.time - b.time);
+            return arr.length ? arr[0].id : null;
+        }
+
+        function handleBuzzSound(gameData) {
+            const st = buzzSoundState;
+            const firstId = firstBuzzerId(gameData.buzzes);
+
+            // First update after connecting: don't replay a buzz that already happened
+            if (!st.initialized) {
+                st.initialized = true;
+                st.played = firstId !== null;
+                return;
+            }
+            // Buzzers were reset: ready for the next round
+            if (firstId === null) {
+                clearTimeout(st.timer);
+                st.timer = null;
+                st.played = false;
+                return;
+            }
+            if (st.played || st.timer) return;
+
+            const watching = window.isHost || window.isSpectator;
+            const myId = window.currentPlayer && window.currentPlayer.id;
+            if (!watching && firstId !== myId) return;   // players only hear it when THEY are first
+
+            // A player's own buzz is first shown with an estimated time, so wait a moment for
+            // the server-confirmed order and only play if they are still the first buzzer.
+            const delay = watching ? 0 : 300;
+            st.timer = setTimeout(() => {
+                st.timer = null;
+                const nowFirst = firstBuzzerId(window.latestBuzzes);
+                if (nowFirst === null || st.played) return;
+                if (!watching && nowFirst !== myId) return;
+                st.played = true;
+                playBuzzSound();
+            }, delay);
+        }
+        // </buzz-sound>
 
         // Global state
         window.db = database;
@@ -1928,6 +2086,7 @@
         // Listen to game updates
         function listenToGame(gameCode) {
             const gameRef = ref(database, `games/${gameCode}`);
+            resetBuzzSoundState();
             
             window.gameListener = onValue(gameRef, (snapshot) => {
                 if (!snapshot.exists()) {
@@ -1941,6 +2100,7 @@
                 const gameData = snapshot.val();
                 window.latestBuzzes = gameData.buzzes || {};
                 checkGameVersion(gameData);
+                handleBuzzSound(gameData);
                 
                 if (window.isHost || window.isSpectator) {
                     // Spectators see the exact same scoring page as the host
