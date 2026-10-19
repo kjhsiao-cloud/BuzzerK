@@ -629,6 +629,59 @@
         .score-btn:disabled {
             opacity: 0.5;
             cursor: not-allowed;
+            pointer-events: none;
+        }
+
+        /* After marking: the chosen button turns solid so the host can see what was marked,
+           and the other two fade back */
+        .score-btn.not-chosen:disabled {
+            opacity: 0.22;
+            filter: grayscale(60%);
+        }
+
+        .score-btn.marked:disabled {
+            opacity: 1;
+            transform: scale(1.12);
+        }
+
+        .score-btn.correct-btn.marked {
+            background: #00ff88;
+            color: var(--dark-bg);
+            box-shadow: 0 0 18px rgba(0, 255, 136, 0.75);
+        }
+
+        .score-btn.incorrect-btn.marked {
+            background: var(--danger-red);
+            color: white;
+            box-shadow: 0 0 18px rgba(255, 0, 84, 0.75);
+        }
+
+        .score-btn.interrupt-btn.marked {
+            background: orange;
+            color: var(--dark-bg);
+            box-shadow: 0 0 18px rgba(255, 165, 0, 0.75);
+        }
+
+        /* Buzz order shown inside the player's card */
+        .order-badge {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.95rem;
+            font-weight: 900;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            color: white;
+            background: var(--soft-blue);
+            box-shadow: 0 0 10px rgba(74, 144, 226, 0.6);
+        }
+
+        .order-badge.first {
+            background: var(--danger-red);
+            box-shadow: 0 0 14px rgba(255, 0, 84, 0.7);
         }
 
         .score-table-container {
@@ -966,7 +1019,7 @@
         /* Host-only controls become inert (but still visible) for spectators */
         body.spectator-mode .controls button:not(.btn-export),
         body.spectator-mode .btn-category,
-        body.spectator-mode .score-btn,
+        body.spectator-mode .score-btn:not(.marked),
         body.spectator-mode .btn-timer,
         body.spectator-mode .btn-reset-small,
         body.spectator-mode .points-field input {
@@ -1583,7 +1636,7 @@
 
         // ── App version + out-of-date detection ─────────────────────────
         // Bump APP_VERSION (YYYY-MM-DD.NN) every time this file changes.
-        const APP_VERSION = '2026-10-12.02';
+        const APP_VERSION = '2026-10-12.03';
 
         let latestDeployedVersion = null;   // version of the page currently on the server
         let gameVersionMessage = null;      // set when this page and the host's page differ
@@ -2156,12 +2209,13 @@
 
                 let statusText = 'Waiting...';
                 let timeDiffHTML = '';
+                let orderBadgeHTML = '';
                 let scoreButtonsHTML = '';
                 let onlineStatusHTML = '';
 
                 // Add online/offline indicator
                 if (!isOnline) {
-                    onlineStatusHTML = '<div style="position: absolute; top: 10px; left: 10px; background: rgba(255, 0, 0, 0.7); color: white; padding: 0.3rem 0.6rem; border-radius: 10px; font-size: 0.7rem; font-weight: 600;">OFFLINE</div>';
+                    onlineStatusHTML = `<div style="position: absolute; top: ${buzz ? 44 : 10}px; left: 10px; background: rgba(255, 0, 0, 0.7); color: white; padding: 0.3rem 0.6rem; border-radius: 10px; font-size: 0.7rem; font-weight: 600;">OFFLINE</div>`;
                 }
 
                 if (buzz) {
@@ -2170,6 +2224,9 @@
                         .sort((a, b) => a.time - b.time);
                     
                     const buzzIndex = buzzesArray.findIndex(b => b.id === playerId);
+
+                    // Buzz order inside the card: 1st, 2nd, 3rd...
+                    orderBadgeHTML = `<div class="order-badge ${buzzIndex === 0 ? 'first' : ''}">${getOrdinal(buzzIndex + 1)}</div>`;
 
                     if (buzzIndex === 0) {
                         card.classList.add('buzzed-first');
@@ -2186,6 +2243,17 @@
                     const currentScore = scores[`Q${currentQ}`]?.[playerId];
                     const isAnswered = currentScore !== undefined;
 
+                    // Which button did the host press? (so it can be shown highlighted)
+                    let chosen = null;
+                    if (isAnswered) {
+                        if (typeof currentScore === 'object') {
+                            chosen = currentScore.interrupted === true ? 'interrupt' : (currentScore.correct ? 'correct' : 'wrong');
+                        } else {
+                            chosen = currentScore ? 'correct' : 'wrong';   // older boolean format
+                        }
+                    }
+                    const btnCls = (kind) => isAnswered ? (chosen === kind ? ' marked' : ' not-chosen') : '';
+
                     const psHint = gameData.pointsSettings || {};
                     const ptCorrect = psHint.correct ?? readPoints('pointsCorrect', 1);
                     const ptWrong = psHint.wrong ?? readPoints('pointsWrong', 0);
@@ -2196,17 +2264,17 @@
                     scoreButtonsHTML = `
                         ${pointsHint}
                         <div class="score-buttons">
-                            <button class="score-btn correct-btn" 
+                            <button class="score-btn correct-btn${btnCls('correct')}" 
                                     onclick="markAnswer('${playerId}', true)"
                                     ${isAnswered ? 'disabled' : ''}>
                                 O
                             </button>
-                            <button class="score-btn incorrect-btn" 
+                            <button class="score-btn incorrect-btn${btnCls('wrong')}" 
                                     onclick="markAnswer('${playerId}', false)"
                                     ${isAnswered ? 'disabled' : ''}>
                                 X
                             </button>
-                            <button class="score-btn interrupt-btn" 
+                            <button class="score-btn interrupt-btn${btnCls('interrupt')}" 
                                     onclick="markInterrupt('${playerId}')"
                                     ${isAnswered ? 'disabled' : ''}
                                     title="Interrupted the question and answered wrong">
@@ -2220,6 +2288,7 @@
 
                 card.innerHTML = `
                     ${onlineStatusHTML}
+                    ${orderBadgeHTML}
                     ${timeDiffHTML}
                     <div class="player-avatar">${initials}</div>
                     <div class="player-name">${playerData.name}</div>
@@ -3160,17 +3229,21 @@
             };
 
             // ── marks grid: 2 rows per question (toss-up, then bonus) ──
-            // Values follow the template's convention: 1 = correct, -1 = incorrect
-            const markFor = (s) => {
+            // Values: 1 = correct, 0 = wrong, -1 = interrupted the question AND wrong.
+            // (Bonus questions can't be interrupted, so a wrong bonus answer is 0.)
+            const markFor = (s, isBonus = false) => {
                 if (s === undefined || s === null) return null;
-                if (typeof s === 'object') return s.correct ? 1 : -1;
-                return s ? 1 : -1;               // older boolean format
+                if (typeof s === 'object') {
+                    if (s.correct) return 1;
+                    return (!isBonus && s.interrupted === true) ? -1 : 0;
+                }
+                return s ? 1 : 0;                // older boolean format
             };
             const colVals = playerEntries.map(([pid]) => {
                 const vals = new Array(R1 - R0 + 1).fill(null);
                 for (let q = 1; q <= playedQ; q++) {
                     const t = markFor((scores[`Q${q}`] || {})[pid]);
-                    const b = markFor((bonusScores[`BQ${q}`] || {})[pid]);
+                    const b = markFor((bonusScores[`BQ${q}`] || {})[pid], true);
                     if (t !== null) vals[(q - 1) * 2] = t;
                     if (b !== null) vals[(q - 1) * 2 + 1] = b;
                 }
@@ -3233,6 +3306,7 @@
             put(11, 1, undefined, { fill: solid('FFBDBDBD'), alignment: { horizontal: 'right', vertical: 'bottom' } });
             put(11, 2, undefined, { fill: solid('FFBDBDBD') });
             put(11, CAP_COL, 'Team captain', { font: arial(10, { bold: true }), fill: solid('FFBDBDBD') });
+            ws.getCell(3, 1).note = 'Counts answers marked -1: the player interrupted the question and answered wrong. A plain wrong answer is recorded as 0.';
             ws.getCell(7, 1).note = 'Native replacement for the Google Sheets function question7(): the row position (counted from the first question row) of the player\'s 7th correct answer, or 0 if they have fewer than 7.';
             ws.getCell(11, CAP_COL).note = 'Inferred by BuzzRush: the player who answered the most bonus questions in each block of 5 questions.';
 
