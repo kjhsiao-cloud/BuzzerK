@@ -662,6 +662,119 @@
             box-shadow: 0 0 18px rgba(255, 165, 0, 0.75);
         }
 
+        /* Team mode */
+        .team-toggle {
+            display: block;
+            margin: 0 auto 1.2rem;
+            padding: 0.4rem 1.1rem;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.7rem;
+            font-weight: 700;
+            letter-spacing: 0.1em;
+            border-radius: 20px;
+            border: 1.5px solid rgba(255, 255, 255, 0.3);
+            background: rgba(255, 255, 255, 0.05);
+            color: rgba(255, 255, 255, 0.55);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .team-toggle.on {
+            border-color: #c77dff;
+            background: rgba(199, 125, 255, 0.15);
+            color: #c77dff;
+        }
+
+        .team-select {
+            display: flex;
+            justify-content: center;
+            gap: 0.6rem;
+            margin: 0.4rem 0 0.5rem;
+        }
+
+        .team-btn {
+            width: 2.2rem;
+            height: 2.2rem;
+            border-radius: 50%;
+            border: 2px solid;
+            background: transparent;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.85rem;
+            font-weight: 900;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .team-btn.a { border-color: #ffd700; color: #ffd700; }
+        .team-btn.b { border-color: #c77dff; color: #c77dff; }
+        .team-btn.a.active { background: #ffd700; color: var(--dark-bg); box-shadow: 0 0 12px rgba(255, 215, 0, 0.65); }
+        .team-btn.b.active { background: #c77dff; color: var(--dark-bg); box-shadow: 0 0 12px rgba(199, 125, 255, 0.65); }
+        .team-select.needs-team .team-btn { box-shadow: 0 0 10px rgba(255, 255, 255, 0.35); }
+
+        /* One framed group per team: Team A on the top row, Team B below */
+        .players-grid.team-layout {
+            display: block;
+        }
+
+        .team-frame {
+            border: 3px solid;
+            border-radius: 18px;
+            padding: 1rem 1.2rem 1.2rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .team-frame.team-a { border-color: #ffd700; background: rgba(255, 215, 0, 0.05); box-shadow: 0 0 18px rgba(255, 215, 0, 0.15); }
+        .team-frame.team-b { border-color: #c77dff; background: rgba(199, 125, 255, 0.05); box-shadow: 0 0 18px rgba(199, 125, 255, 0.15); }
+        .team-frame.team-u { border-style: dashed; border-color: rgba(255, 255, 255, 0.3); }
+
+        .team-frame-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.95rem;
+            font-weight: 700;
+            letter-spacing: 0.1em;
+        }
+
+        .team-a .team-frame-head { color: #ffd700; }
+        .team-b .team-frame-head { color: #c77dff; }
+        .team-u .team-frame-head { color: rgba(255, 255, 255, 0.6); }
+        .team-frame-pts { font-size: 1.1rem; }
+
+        .players-grid.team-frame-grid { margin: 0.8rem 0 0; }
+
+        .team-frame-empty {
+            grid-column: 1 / -1;
+            text-align: center;
+            opacity: 0.5;
+            padding: 1.2rem;
+            font-size: 0.85rem;
+        }
+
+        .member-pts {
+            display: inline-block;
+            margin: 0.15rem 0.9rem 0.15rem 0;
+            font-size: 0.9rem;
+        }
+        .member-pts b { margin-left: 0.35rem; }
+
+        .team-badge {
+            display: none;
+            margin: 0 auto 1.2rem;
+            width: fit-content;
+            padding: 0.4rem 1.2rem;
+            border-radius: 20px;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.8rem;
+            font-weight: 700;
+            letter-spacing: 0.1em;
+            border: 1.5px solid rgba(255, 255, 255, 0.3);
+            color: rgba(255, 255, 255, 0.6);
+        }
+        .team-badge.team-a { border-color: #ffd700; color: #ffd700; background: rgba(255, 215, 0, 0.12); }
+        .team-badge.team-b { border-color: #c77dff; color: #c77dff; background: rgba(199, 125, 255, 0.12); }
+
         /* Buzz order shown inside the player's card */
         .order-badge {
             position: absolute;
@@ -1022,6 +1135,8 @@
         body.spectator-mode .score-btn:not(.marked),
         body.spectator-mode .btn-timer,
         body.spectator-mode .btn-reset-small,
+        body.spectator-mode .team-btn:not(.active),
+        body.spectator-mode .team-toggle,
         body.spectator-mode .points-field input {
             pointer-events: none;
             opacity: 0.45;
@@ -1422,6 +1537,7 @@
                 </div>
 
                 <button class="sound-toggle" onclick="toggleSound()">🔊 SOUND ON</button>
+                <button class="team-toggle" onclick="toggleTeamMode()">👥 TEAM MODE: OFF</button>
 
                 <div class="info-banner">
                     Players can join using this code. Press "Reset" to allow new buzzes.
@@ -1544,6 +1660,28 @@
                     </table>
                 </div>
 
+                <!-- Team Score (team mode only) -->
+                <div id="teamScoreSection" style="display: none;">
+                    <h3 style="text-align: center; margin: 2rem 0 1rem; font-family: 'Orbitron', sans-serif; color: #c77dff;">
+                        👥 TEAM SCORE
+                    </h3>
+                    <div class="score-table-container">
+                        <table class="score-table" id="teamScoreTable">
+                            <thead>
+                                <tr>
+                                    <th>Team</th>
+                                    <th>Players (points)</th>
+                                    <th>Toss-Up Pts</th>
+                                    <th>Bonus Pts</th>
+                                    <th>Total Points</th>
+                                </tr>
+                            </thead>
+                            <tbody id="teamScoreBody">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
                 <!-- Subject Breakdown Table -->
                 <h3 style="text-align: center; margin: 2rem 0 1rem; font-family: 'Orbitron', sans-serif; color: var(--gold);">
                     SUBJECT BREAKDOWN
@@ -1580,6 +1718,7 @@
                 </div>
 
                 <button class="sound-toggle" onclick="toggleSound()">🔊 SOUND ON</button>
+                <div class="team-badge" id="playerTeamBadge"></div>
 
                 <div class="buzz-indicator" id="buzzIndicator">
                     Ready to buzz!
@@ -1629,6 +1768,15 @@
             const n = parseInt(document.getElementById(elId)?.value);
             return Number.isNaN(n) ? fallback : n;
         }
+        // Team helpers
+        function teamTag(gameData, pid) {
+            const t = gameData.teamMode && gameData.players && gameData.players[pid] && gameData.players[pid].team;
+            return t ? ' (' + t + ')' : '';
+        }
+        function esc(str) {
+            return String(str).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+        }
+
         // "-5" for a deduction, "0" when there is none (avoids showing "-0")
         function lossLabel(n) {
             return n === 0 ? '0' : '-' + n;
@@ -1636,7 +1784,7 @@
 
         // ── App version + out-of-date detection ─────────────────────────
         // Bump APP_VERSION (YYYY-MM-DD.NN) every time this file changes.
-        const APP_VERSION = '2026-10-12.03';
+        const APP_VERSION = '2026-10-26.01';
 
         let latestDeployedVersion = null;   // version of the page currently on the server
         let gameVersionMessage = null;      // set when this page and the host's page differ
@@ -1926,6 +2074,19 @@
             }, 300);
         };
 
+        // Team mode: host switch + per-player Team A / Team B
+        window.toggleTeamMode = async function() {
+            if (!window.currentGame || !window.isHost) return;
+            const snap = await get(ref(database, `games/${window.currentGame}/teamMode`));
+            await update(ref(database), { [`games/${window.currentGame}/teamMode`]: !snap.val() });
+        };
+
+        window.setPlayerTeam = async function(playerId, team) {
+            if (!window.currentGame || !window.isHost) return;
+            if (team !== 'A' && team !== 'B') return;
+            await update(ref(database), { [`games/${window.currentGame}/players/${playerId}/team`]: team });
+        };
+
         window.createGame = async function() {
             const hostName = document.getElementById('hostName').value.trim();
             if (!hostName) {
@@ -1952,7 +2113,8 @@
                 bonusCategories: {},
                 spectators: {},
                 pointsSettings: { correct: 1, wrong: 0, interrupt: 1 },
-                appVersion: APP_VERSION
+                appVersion: APP_VERSION,
+                teamMode: false
             });
 
             document.getElementById('displayGameCode').textContent = code;
@@ -2177,6 +2339,12 @@
 
             document.getElementById('playerCount').textContent = Object.keys(players).length;
 
+            const teamBtn = document.querySelector('.team-toggle');
+            if (teamBtn) {
+                teamBtn.textContent = gameData.teamMode ? '👥 TEAM MODE: ON' : '👥 TEAM MODE: OFF';
+                teamBtn.classList.toggle('on', !!gameData.teamMode);
+            }
+
             // Sync points settings fields from Firebase (skip any field the host
             // is actively typing in, so we don't clobber their in-progress edit)
             const pointsSettings = gameData.pointsSettings || {};
@@ -2195,6 +2363,25 @@
             }
 
             grid.innerHTML = '';
+
+            // Team mode: a framed group per team (Team A on top, Team B below); players
+            // without a team wait in a "no team yet" group at the very top
+            const teamLayout = !!gameData.teamMode;
+            grid.classList.toggle('team-layout', teamLayout);
+            const targets = {};
+            if (teamLayout) {
+                const ts0 = computeTeamStats(gameData);
+                const hasUnassigned = ts0.U.members.length > 0;
+                (hasUnassigned ? ['U', 'A', 'B'] : ['A', 'B']).forEach(k => {
+                    const frame = document.createElement('div');
+                    frame.className = `team-frame team-${k.toLowerCase()}`;
+                    const title = k === 'U' ? 'NO TEAM YET — CHOOSE A OR B ON EACH PLAYER' : `TEAM ${k}`;
+                    const pts = k === 'U' ? '' : `<span class="team-frame-pts">${ts0[k].points > 0 ? '+' : ''}${ts0[k].points} pts</span>`;
+                    frame.innerHTML = `<div class="team-frame-head"><span>${title}</span>${pts}</div><div class="players-grid team-frame-grid"></div>`;
+                    grid.appendChild(frame);
+                    targets[k] = frame.querySelector('.team-frame-grid');
+                });
+            }
 
             Object.entries(players).forEach(([playerId, playerData]) => {
                 const buzz = buzzes[playerId];
@@ -2286,23 +2473,43 @@
 
                 const initials = playerData.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
 
+                // Team A / B selector (team mode only)
+                let teamSelectHTML = '';
+                if (gameData.teamMode) {
+                    const tm = playerData.team;
+                    teamSelectHTML = `<div class="team-select${tm ? '' : ' needs-team'}">` +
+                        `<button class="team-btn a${tm === 'A' ? ' active' : ''}" onclick="setPlayerTeam('${playerId}','A')">A</button>` +
+                        `<button class="team-btn b${tm === 'B' ? ' active' : ''}" onclick="setPlayerTeam('${playerId}','B')">B</button></div>`;
+                    if (tm) card.dataset.team = tm;
+                }
+
                 card.innerHTML = `
                     ${onlineStatusHTML}
                     ${orderBadgeHTML}
                     ${timeDiffHTML}
                     <div class="player-avatar">${initials}</div>
                     <div class="player-name">${playerData.name}</div>
+                    ${teamSelectHTML}
                     <div class="player-status">${statusText}</div>
                     ${scoreButtonsHTML}
                 `;
 
-                grid.appendChild(card);
+                const target = teamLayout ? targets[(playerData.team === 'A' || playerData.team === 'B') ? playerData.team : 'U'] : grid;
+                target.appendChild(card);
             });
+
+            if (teamLayout) {
+                Object.values(targets).forEach(el => {
+                    if (!el.children.length) el.innerHTML = '<div class="team-frame-empty">No players yet. Tap A or B on a player card to add one.</div>';
+                });
+            }
 
             // Update score table
             updateScoreTable(gameData);
             // Update score sheet
             updateScoreSheet(gameData);
+            // Extra team score table (team mode only)
+            updateTeamScoreTable(gameData);
             // Update subject breakdown
             updateSubjectBreakdown(gameData);
             // Update bonus table
@@ -2317,6 +2524,19 @@
             const leaderboard = document.getElementById('leaderboard');
             const button = document.getElementById('buzzButton');
             const indicator = document.getElementById('buzzIndicator');
+
+            // Show which team this player is on (team mode)
+            const teamBadge = document.getElementById('playerTeamBadge');
+            if (teamBadge) {
+                const myTeam = gameData.players && gameData.players[window.currentPlayer.id] && gameData.players[window.currentPlayer.id].team;
+                if (gameData.teamMode) {
+                    teamBadge.style.display = 'block';
+                    teamBadge.textContent = myTeam ? `TEAM ${myTeam}` : 'WAITING FOR TEAM ASSIGNMENT';
+                    teamBadge.className = 'team-badge' + (myTeam ? ' team-' + myTeam.toLowerCase() : '');
+                } else {
+                    teamBadge.style.display = 'none';
+                }
+            }
 
             // Check if current player has buzzed
             const myBuzz = buzzes[window.currentPlayer.id];
@@ -2593,7 +2813,7 @@
             header.innerHTML = '<th>Question</th>';
             Object.entries(players).forEach(([playerId, playerData]) => {
                 const th = document.createElement('th');
-                th.textContent = playerData.name;
+                th.textContent = playerData.name + teamTag(gameData, playerId);
                 header.appendChild(th);
             });
 
@@ -3023,9 +3243,9 @@
 
             // Build header: Bonus Q | Player1 | Player2 | ...
             header.innerHTML = '<th>Bonus Q</th>';
-            playerEntries.forEach(([, pd]) => {
+            playerEntries.forEach(([pid, pd]) => {
                 const th = document.createElement('th');
-                th.textContent = pd.name;
+                th.textContent = pd.name + teamTag(gameData, pid);
                 header.appendChild(th);
             });
 
@@ -3090,6 +3310,38 @@
             }
         }
 
+        // Extra table in team mode: total points earned by the players of each team
+        function updateTeamScoreTable(gameData) {
+            const section = document.getElementById('teamScoreSection');
+            const body = document.getElementById('teamScoreBody');
+            if (!section || !body) return;
+            if (!gameData.teamMode) {
+                section.style.display = 'none';
+                return;
+            }
+            section.style.display = 'block';
+
+            const ts = computeTeamStats(gameData);
+            const fmt = v => (v > 0 ? '+' : '') + v;
+            const cls = v => v > 0 ? 'positive' : v < 0 ? 'negative' : '';
+            const colors = { A: '#ffd700', B: '#c77dff', U: 'rgba(255,255,255,0.55)' };
+            body.innerHTML = '';
+            ['A', 'B'].concat(ts.U.members.length ? ['U'] : []).forEach(k => {
+                const t = ts[k];
+                const members = t.members.length
+                    ? t.members.map(m => `<span class="member-pts">${esc(m.name)} <b class="score-sheet-points ${cls(m.points)}">${fmt(m.points)}</b></span>`).join('')
+                    : '<span style="opacity:0.5;">no players yet</span>';
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td><span class="score-sheet-name" style="color:${colors[k]}">${k === 'U' ? 'NO TEAM YET' : 'TEAM ' + k}</span></td>
+                    <td>${members}</td>
+                    <td><span class="score-sheet-points ${cls(t.tossUp)}" style="font-size:0.9rem;">${fmt(t.tossUp)}</span></td>
+                    <td><span class="score-sheet-points ${cls(t.bonus)}" style="font-size:0.9rem;">${fmt(t.bonus)}</span></td>
+                    <td><span class="score-sheet-points ${cls(t.points)}" style="font-size:1.4rem;">${fmt(t.points)}</span></td>`;
+                body.appendChild(row);
+            });
+        }
+
         // Update spectators list at the bottom of the scoring page
         function updateSpectatorsList(gameData) {
             const spectators = gameData.spectators || {};
@@ -3152,6 +3404,40 @@
 
 
         // <export-builder>
+        // Team totals (team mode): the points earned by the players on each team.
+        // A = Team A, B = Team B, U = players who have no team yet.
+        function computeTeamStats(g) {
+            const players = g.players || {};
+            const pp = g.playerPoints || {};
+            const mk = k => ({ team: k, members: [], tossUp: 0, bonus: 0, points: 0 });
+            const teams = { A: mk('A'), B: mk('B'), U: mk('U') };
+            const byId = {};
+            Object.entries(players).forEach(([pid, pl]) => {
+                const key = (pl.team === 'A' || pl.team === 'B') ? pl.team : 'U';
+                byId[pid] = { name: pl.name, tossUp: 0, bonus: 0, points: pp[pid] || 0 };
+                teams[key].members.push(byId[pid]);
+            });
+            Object.values(g.scores || {}).forEach(q => {
+                if (!q) return;
+                Object.entries(q).forEach(([pid, sc]) => {
+                    if (byId[pid] && sc && typeof sc === 'object') byId[pid].tossUp += sc.pointsAwarded || 0;
+                });
+            });
+            Object.values(g.bonusScores || {}).forEach(q => {
+                if (!q) return;
+                Object.entries(q).forEach(([pid, sc]) => {
+                    if (byId[pid] && sc && typeof sc === 'object') byId[pid].bonus += sc.pointsAwarded || 0;
+                });
+            });
+            ['A', 'B', 'U'].forEach(k => {
+                const t = teams[k];
+                t.tossUp = t.members.reduce((a, m) => a + m.tossUp, 0);
+                t.bonus = t.members.reduce((a, m) => a + m.bonus, 0);
+                t.points = t.members.reduce((a, m) => a + m.points, 0);
+            });
+            return teams;
+        }
+
         // ── Excel export (ExcelJS) ──────────────────────────────────────────
         // First sheet reproduces the layout/style of the "template." tab in the
         // Science Bowl practice scoring workbook. Supporting tabs follow it.
@@ -3207,6 +3493,8 @@
             const R0 = 12, R1 = 251;            // first / last question row
             const topicL = xlColLetter(TOPIC_COL);
             const pivL = xlColLetter(PIV_COL);
+
+            const tagOf = (pl) => (g.teamMode && pl.team) ? ` (${pl.team})` : '';
 
             const ws = wb.addWorksheet(sheetName, {
                 properties: { defaultColWidth: 12.63, defaultRowHeight: 15.75 },
@@ -3285,7 +3573,7 @@
                 const extra = q7 !== 0 ? 102 - q7 : 0;
                 const total = vals.reduce((a, b) => a + b, 0) + extra;
 
-                put(1, c, p.name, { font: arial(9, { bold: true }), alignment: center });
+                put(1, c, p.name + tagOf(p), { font: arial(9, { bold: true }), alignment: center });
                 put(2, c, { formula: `COUNTIF(${rng},">=1")`, result: correct }, { font: arial(9, { bold: true }), alignment: center });
                 put(3, c, { formula: `COUNTIF(${rng},"-1")`, result: incorrect }, { font: arial(10), alignment: center });
                 put(4, c, { formula: `COUNTIF(${rng},"=4")`, result: power }, { font: arial(10), alignment: center });
@@ -3301,7 +3589,7 @@
                 put(9, c, { formula: `SUM(${rng})+${L}8`, result: total }, { font: arial(10, { bold: true }), alignment: center });
 
                 // header band repeated above the grid
-                put(11, c, p.name, { font: arial(9, { bold: true }), fill: solid('FFBDBDBD'), alignment: center });
+                put(11, c, p.name + tagOf(p), { font: arial(9, { bold: true }), fill: solid('FFBDBDBD'), alignment: center });
             });
             put(11, 1, undefined, { fill: solid('FFBDBDBD'), alignment: { horizontal: 'right', vertical: 'bottom' } });
             put(11, 2, undefined, { fill: solid('FFBDBDBD') });
@@ -3384,7 +3672,7 @@
                     const t = q <= playedQ ? toSbTopic(categories[`Q${q}`] || bonusCategories[`BQ${q}`]) : '';
                     return pred(t) ? acc + (v || 0) : acc;
                 }, 0);
-                put(PIV_HDR, c, `SUM of ${p.name}`, { font: arial(10) });
+                put(PIV_HDR, c, `SUM of ${p.name}${tagOf(p)}`, { font: arial(10) });
                 const blankSum = sumFor(t => t === '');
                 put(PIV_FIRST, c, { formula: `SUMIF(${topicRange},"",${sumRange})`, result: blankSum }, { font: arial(10) });
                 let grand = blankSum;
@@ -3396,6 +3684,17 @@
                 });
                 put(PIV_TOTAL, c, { formula: `SUM(${pl}${PIV_FIRST}:${pl}${PIV_LAST})`, result: grand }, { font: arial(10) });
             });
+
+            // ── team mode: team scores under the summary (game points, from the host's point settings) ──
+            if (g.teamMode) {
+                const ts = computeTeamStats(g);
+                const tr = PIV_TOTAL + 2;
+                put(tr, PIV_COL, 'Team scores (game points)', { font: arial(10, { bold: true }) });
+                ['A', 'B'].forEach((k, i) => {
+                    put(tr + 1 + i, PIV_COL, `Team ${k}`, { font: arial(10) });
+                    put(tr + 1 + i, PIV_COL + 1, ts[k].points, { font: arial(10, { bold: true }) });
+                });
+            }
 
             // ── conditional format: Correct Answers >= 7 turns green ──
             if (N > 0) {
@@ -3463,6 +3762,19 @@
             const dd = String(now.getDate()).padStart(2, '0');
             const yy = String(now.getFullYear()).slice(-2);
             addScoringTemplateSheet(wb, g, gameCode, `${mm}${dd}${yy}`);
+
+            // ── Team mode: extra "Team Score" tab right after the scoring sheet ──
+            if (g.teamMode) {
+                const ts = computeTeamStats(g);
+                const fmt = v => (v > 0 ? '+' : '') + v;
+                const rows = [['Team', 'Players (points)', 'Toss-Up Pts', 'Bonus Pts', 'Total Points']];
+                ['A', 'B', 'U'].forEach(k => {
+                    const t = ts[k];
+                    if (k === 'U' && !t.members.length) return;
+                    rows.push([k === 'U' ? 'No team' : `Team ${k}`, t.members.map(m => `${m.name} (${fmt(m.points)})`).join(', '), t.tossUp, t.bonus, t.points]);
+                });
+                addTableSheet(wb, 'Team Score', rows, [12, 50, 12, 12, 14]);
+            }
 
             // ── Sheet 2: Toss-Up Question Tracker ───────────────
             {
